@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   toDateStr,
   getThisMonthRange,
+  getPreviousMonthRange,
   getLastNMonthsRange,
   getFinancialYearRange,
   detectPreset,
@@ -35,6 +36,32 @@ describe('getThisMonthRange', () => {
   it('handles February in a leap year', () => {
     const today = new Date(2024, 1, 15); // Feb 15, 2024 (leap year)
     expect(getThisMonthRange(today)).toEqual({
+      dateFrom: '2024-02-01',
+      dateTo: '2024-02-29',
+    });
+  });
+});
+
+describe('getPreviousMonthRange', () => {
+  it('returns 1st to last day of the previous calendar month', () => {
+    const today = new Date(2026, 3, 18); // Apr 18, 2026
+    expect(getPreviousMonthRange(today)).toEqual({
+      dateFrom: '2026-03-01',
+      dateTo: '2026-03-31',
+    });
+  });
+
+  it('rolls over to December of the previous year when in January', () => {
+    const today = new Date(2026, 0, 15); // Jan 15, 2026
+    expect(getPreviousMonthRange(today)).toEqual({
+      dateFrom: '2025-12-01',
+      dateTo: '2025-12-31',
+    });
+  });
+
+  it('handles February following a leap year correctly', () => {
+    const today = new Date(2024, 2, 5); // Mar 5, 2024 (post-leap)
+    expect(getPreviousMonthRange(today)).toEqual({
       dateFrom: '2024-02-01',
       dateTo: '2024-02-29',
     });
@@ -117,6 +144,10 @@ describe('detectPreset', () => {
     expect(detectPreset('2026-04-01', '2026-04-30', today)).toBe('this_month');
   });
 
+  it('identifies previous_month', () => {
+    expect(detectPreset('2026-03-01', '2026-03-31', today)).toBe('previous_month');
+  });
+
   it('identifies last_3_months', () => {
     expect(detectPreset('2026-02-01', '2026-04-30', today)).toBe('last_3_months');
   });
@@ -144,6 +175,7 @@ describe('DATE_PRESETS', () => {
     const values = DATE_PRESETS.map((p) => p.value);
     expect(values).toEqual([
       'this_month',
+      'previous_month',
       'last_3_months',
       'last_6_months',
       'financial_year',

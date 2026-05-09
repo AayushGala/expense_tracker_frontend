@@ -138,6 +138,10 @@ const api = {
   getSettings: () => request('GET', '/api/settings/'),
   updateSetting: (key, value) => request('PUT', `/api/settings/${key}/`, { value }),
 
+  // Backups
+  listBackups: () => request('GET', '/api/backup/'),
+  createBackup: () => request('POST', '/api/backup/create/'),
+
   // Token helpers
   getToken,
   setToken,

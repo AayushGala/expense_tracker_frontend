@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTransactions } from '../hooks/useTransactions';
 import { useTransactionSummary } from '../hooks/useTransactionSummary';
@@ -14,6 +14,7 @@ import TransactionSummary from '../components/transactions/TransactionSummary';
 import SavedViews from '../components/transactions/SavedViews';
 import { formatDate, transactionTypeLabel } from '../utils/formatters';
 import { getThisMonthRange } from '../utils/datePresets';
+import { downloadTransactionsCSV } from '../utils/transactionCsv';
 import TypeIcon, { getVariant } from '../components/common/TypeIcon';
 
 // ---------------------------------------------------------------------------
@@ -32,6 +33,56 @@ function groupByDate(transactions) {
     groups.get(key).push(txn);
   }
   return groups;
+}
+
+// ---------------------------------------------------------------------------
+// Sort header button (desktop table)
+// ---------------------------------------------------------------------------
+
+function SortIcon({ direction }) {
+  if (direction === 'asc') {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+      </svg>
+    );
+  }
+  if (direction === 'desc') {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+      </svg>
+    );
+  }
+  // Inactive: subtle up/down chevrons
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-gray-300" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M5 8l5-5 5 5H5zm0 4l5 5 5-5H5z" />
+    </svg>
+  );
+}
+
+function SortableHeader({ label, sortKey, sortChain, onSort, align = 'left', className = '' }) {
+  const idx = sortChain.findIndex((c) => c.key === sortKey);
+  const active = idx >= 0;
+  const direction = active ? sortChain[idx].dir : null;
+  const showRank = active && sortChain.length > 1;
+  const justify = align === 'right' ? 'justify-end' : 'justify-start';
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className={`w-full flex items-center gap-1 ${justify} text-[11px] font-semibold uppercase tracking-wider transition-colors ${active ? 'text-gray-700' : 'text-gray-400 hover:text-gray-600'} ${className}`}
+    >
+      <span>{label}</span>
+      <SortIcon direction={direction} />
+      {showRank && (
+        <span className="ml-0.5 inline-flex items-center justify-center h-3.5 min-w-[14px] px-1 rounded-sm bg-accent-light text-[9px] font-bold text-brand">
+          {idx + 1}
+        </span>
+      )}
+    </button>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -212,12 +263,52 @@ export default function TransactionsPage() {
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [splitMode, setSplitMode] = useState('my_share');
+  // Multi-column sort: first click adds the column as a tiebreaker at the end
+  // of the chain, so already-sorted columns keep their priority. Default: empty
+  // chain — the data comes pre-sorted by date desc from useTransactions.
+  const [sortChain, setSortChain] = useState([]);
 
   const { filteredTransactions, getTransactionEntries } = useTransactions(filters);
   const { summary, isLoading: summaryLoading } = useTransactionSummary(filters, splitMode);
 
-  const totalPages = Math.ceil(filteredTransactions.length / PAGE_SIZE);
-  const paginatedTxns = filteredTransactions.slice(
+  const sortedTransactions = useMemo(() => {
+    const arr = [...filteredTransactions];
+    arr.sort((a, b) => {
+      for (const { key, dir } of sortChain) {
+        let cmp;
+        if (key === 'amount') {
+          cmp = (a.amount ?? 0) - (b.amount ?? 0);
+        } else {
+          cmp = new Date(a.date) - new Date(b.date);
+        }
+        if (cmp !== 0) return dir === 'asc' ? cmp : -cmp;
+      }
+      return 0;
+    });
+    return arr;
+  }, [filteredTransactions, sortChain]);
+
+  /**
+   * Click cycle for each column: asc → desc → remove.
+   * - Not in chain → append as asc (lowest-priority tiebreaker).
+   * - In chain as asc → flip to desc (priority unchanged).
+   * - In chain as desc → remove from chain.
+   * This keeps earlier sorts intact; a new column joins as a tiebreaker.
+   */
+  function handleSort(key) {
+    setSortChain((chain) => {
+      const idx = chain.findIndex((c) => c.key === key);
+      if (idx === -1) return [...chain, { key, dir: 'asc' }];
+      if (chain[idx].dir === 'asc') {
+        return chain.map((c, i) => (i === idx ? { ...c, dir: 'desc' } : c));
+      }
+      return chain.filter((_, i) => i !== idx);
+    });
+    setCurrentPage(1);
+  }
+
+  const totalPages = Math.ceil(sortedTransactions.length / PAGE_SIZE);
+  const paginatedTxns = sortedTransactions.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
   );
@@ -300,11 +391,24 @@ export default function TransactionsPage() {
       ) : (
         <Card className="p-0 overflow-hidden">
           {/* Table header label */}
-          <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center justify-between gap-3 px-4 md:px-5 py-4 border-b border-gray-100">
             <h2 className="text-sm font-bold text-gray-900">Recent Activity</h2>
-            <p className="text-xs text-gray-400">
-              {paginatedTxns.length} of {filteredTransactions.length}
-            </p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-gray-400">
+                {paginatedTxns.length} of {filteredTransactions.length}
+              </p>
+              <button
+                type="button"
+                onClick={() => downloadTransactionsCSV(sortedTransactions)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+                title={`Download ${sortedTransactions.length} filtered transactions as CSV`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
+                </svg>
+                CSV
+              </button>
+            </div>
           </div>
 
           {/* Mobile card list */}
@@ -323,10 +427,25 @@ export default function TransactionsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100">
-                  <th className="py-3 pl-5 pr-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Date</th>
+                  <th className="py-3 pl-5 pr-3 text-left">
+                    <SortableHeader
+                      label="Date"
+                      sortKey="date"
+                      sortChain={sortChain}
+                      onSort={handleSort}
+                    />
+                  </th>
                   <th className="py-3 px-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">Description</th>
                   <th className="py-3 px-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400 hidden lg:table-cell">Category</th>
-                  <th className="py-3 px-3 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-400">Amount</th>
+                  <th className="py-3 px-3 text-right">
+                    <SortableHeader
+                      label="Amount"
+                      sortKey="amount"
+                      sortChain={sortChain}
+                      onSort={handleSort}
+                      align="right"
+                    />
+                  </th>
                   <th className="py-3 pl-3 pr-5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400 hidden sm:table-cell">Status</th>
                 </tr>
               </thead>

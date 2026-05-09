@@ -2,39 +2,16 @@ import { useEffect, useState } from 'react';
 import Card from '../common/Card';
 import { useData } from '../../context/DataContext';
 import api from '../../api/client';
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
+import {
+  transactionsToCSV,
+  downloadBlob,
+  csvTimestamp,
+} from '../../utils/transactionCsv';
 
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function toCSV(transactions) {
-  const headers = ['id', 'date', 'type', 'amount', 'beneficiary', 'notes', 'tags'];
-  const escape = (v) => {
-    const str = v == null ? '' : String(v);
-    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
-  };
-
-  const rows = transactions.map((txn) =>
-    headers.map((h) => escape(txn[h])).join(',')
-  );
-
-  return [headers.join(','), ...rows].join('\n');
 }
 
 export default function DataExport() {
@@ -93,9 +70,6 @@ export default function DataExport() {
     }
   }
 
-  const timestamp = () =>
-    new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-
   function handleExportJSON() {
     const payload = {
       exportedAt: new Date().toISOString(),
@@ -109,13 +83,13 @@ export default function DataExport() {
     };
     const json = JSON.stringify(payload, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
-    downloadBlob(blob, `expense-tracker-export-${timestamp()}.json`);
+    downloadBlob(blob, `expense-tracker-export-${csvTimestamp()}.json`);
   }
 
   function handleExportCSV() {
-    const csv = toCSV(transactions);
+    const csv = transactionsToCSV(transactions);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    downloadBlob(blob, `transactions-${timestamp()}.csv`);
+    downloadBlob(blob, `transactions-${csvTimestamp()}.csv`);
   }
 
   const btnClass =

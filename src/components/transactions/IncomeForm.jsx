@@ -19,7 +19,11 @@ export default function IncomeForm({ onSubmit, initialData }) {
   const { accounts, categories, transactions, entries } = useData();
   const { owners, getAccountOwner } = useOwners();
 
-  const assetAccounts = accounts.filter((a) => a.type === 'asset' && a.is_active !== false);
+  // Income normally lands in an asset account, but refunds can come back to a
+  // credit card (liability). Allow both.
+  const receivingAccounts = accounts.filter(
+    (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false,
+  );
   const incomeCategories = categories.filter((c) => c.type === 'income');
 
   // Lookup helpers for the role-tagged refund category.
@@ -178,7 +182,7 @@ export default function IncomeForm({ onSubmit, initialData }) {
           <Select
             value={toAccountId}
             onChange={(e) => handleToAccountChange(e.target.value)}
-            options={assetAccounts.map(accountOption)}
+            options={receivingAccounts.map(accountOption)}
             placeholder="Select account"
           />
           {isRefundMode && (

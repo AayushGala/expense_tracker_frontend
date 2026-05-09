@@ -16,6 +16,8 @@ function SubCategoryRow({ category, onEdit, onDelete }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   function handleSave() {
     if (name.trim() && name.trim() !== category.name) {
@@ -24,8 +26,23 @@ function SubCategoryRow({ category, onEdit, onDelete }) {
     setEditing(false);
   }
 
+  async function handleConfirmDelete() {
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await onDelete(category.id);
+      setConfirmDelete(false);
+    } catch (err) {
+      setDeleteError(err.message || 'Failed to delete category.');
+      setConfirmDelete(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
-    <div className="flex items-center gap-2 py-2.5 group">
+    <div className="py-2.5 group">
+      <div className="flex items-center gap-2">
       {editing ? (
         <>
           <input
@@ -64,10 +81,11 @@ function SubCategoryRow({ category, onEdit, onDelete }) {
             {confirmDelete ? (
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => { onDelete(category.id); setConfirmDelete(false); }}
-                  className="text-xs px-2.5 py-1 bg-brand text-white rounded-lg font-semibold hover:bg-brand-hover transition-colors"
+                  onClick={handleConfirmDelete}
+                  disabled={deleting}
+                  className="text-xs px-2.5 py-1 bg-brand text-white rounded-lg font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
                 >
-                  Confirm
+                  {deleting ? '...' : 'Confirm'}
                 </button>
                 <button
                   onClick={() => setConfirmDelete(false)}
@@ -87,6 +105,18 @@ function SubCategoryRow({ category, onEdit, onDelete }) {
           </div>
         </>
       )}
+      </div>
+      {deleteError && (
+        <div className="mt-1.5 flex items-start gap-2 text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-2.5 py-1.5">
+          <span className="flex-1">{deleteError}</span>
+          <button
+            onClick={() => setDeleteError('')}
+            className="text-rose-400 hover:text-rose-600 font-semibold"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -99,6 +129,8 @@ function CategoryRow({ category, onEdit, onDelete, onAddSub, onEditSub, onDelete
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   // Add subcategory form
   const [addingSub, setAddingSub] = useState(false);
@@ -110,6 +142,20 @@ function CategoryRow({ category, onEdit, onDelete, onAddSub, onEditSub, onDelete
       onEdit(category.id, { name: name.trim() });
     }
     setEditing(false);
+  }
+
+  async function handleConfirmDelete() {
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await onDelete(category.id);
+      setConfirmDelete(false);
+    } catch (err) {
+      setDeleteError(err.message || 'Failed to delete category.');
+      setConfirmDelete(false);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleAddSub() {
@@ -176,10 +222,11 @@ function CategoryRow({ category, onEdit, onDelete, onAddSub, onEditSub, onDelete
               ) : confirmDelete ? (
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => { onDelete(category.id); setConfirmDelete(false); }}
-                    className="text-xs px-2.5 py-1 bg-brand text-white rounded-lg font-semibold hover:bg-brand-hover transition-colors"
+                    onClick={handleConfirmDelete}
+                    disabled={deleting}
+                    className="text-xs px-2.5 py-1 bg-brand text-white rounded-lg font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
                   >
-                    Confirm
+                    {deleting ? '...' : 'Confirm'}
                   </button>
                   <button
                     onClick={() => setConfirmDelete(false)}
@@ -200,6 +247,18 @@ function CategoryRow({ category, onEdit, onDelete, onAddSub, onEditSub, onDelete
           </>
         )}
       </div>
+
+      {deleteError && (
+        <div className="mt-1.5 flex items-start gap-2 text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-2.5 py-1.5">
+          <span className="flex-1">{deleteError}</span>
+          <button
+            onClick={() => setDeleteError('')}
+            className="text-rose-400 hover:text-rose-600 font-semibold"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Subcategories */}
       {children.length > 0 && (

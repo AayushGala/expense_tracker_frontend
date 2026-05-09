@@ -83,10 +83,6 @@ describe('transactionTypeLabel', () => {
     expect(transactionTypeLabel('investment')).toBe('Investment');
   });
 
-  it('returns "Cashback" for cashback type', () => {
-    expect(transactionTypeLabel('cashback')).toBe('Cashback');
-  });
-
   it('returns "Split Expense" for split_expense type', () => {
     expect(transactionTypeLabel('split_expense')).toBe('Split Expense');
   });

@@ -1,13 +1,13 @@
 import { useState, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
+import { useOwners } from '../../hooks/useOwners';
 import TypeSelector from './TypeSelector';
 import ExpenseForm from './ExpenseForm';
 import IncomeForm from './IncomeForm';
 import TransferForm from './TransferForm';
 import BillPaymentForm from './BillPaymentForm';
 import InvestmentForm from './InvestmentForm';
-import CashbackForm from './CashbackForm';
 import SplitExpenseForm from './SplitExpenseForm';
 import ReimbursementForm from './ReimbursementForm';
 import Card from '../common/Card';
@@ -54,11 +54,12 @@ function buildInitialData(transaction, entries, accounts, receivables) {
       };
 
     case 'income':
-      // DEBIT account = to_account, CREDIT category = category
+      // DEBIT account = to_account, CREDIT category = entry category (may be source's category for refunds)
       return {
         ...base,
         to_account_id: debitAccountEntry?.account_id ?? '',
         category_id: transaction.category_id ?? creditCategoryEntry?.category_id ?? '',
+        source_transaction_id: transaction.source_transaction ?? null,
       };
 
     case 'transfer':
@@ -69,14 +70,6 @@ function buildInitialData(transaction, entries, accounts, receivables) {
         ...base,
         from_account_id: creditAccountEntry?.account_id ?? '',
         to_account_id: debitAccountEntry?.account_id ?? '',
-      };
-
-    case 'cashback':
-      // DEBIT account = account receiving cashback
-      return {
-        ...base,
-        account_id: debitAccountEntry?.account_id ?? '',
-        category_id: transaction.category_id ?? creditCategoryEntry?.category_id ?? '',
       };
 
     case 'split_expense': {
@@ -108,7 +101,10 @@ function buildInitialData(transaction, entries, accounts, receivables) {
 export default function TransactionForm() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { transactions, entries, accounts, receivables, addTransaction, updateTransaction } = useData();
+  const [searchParams] = useSearchParams();
+  const refundOfId = searchParams.get('refund_of');
+  const { transactions, entries, accounts, categories, receivables, addTransaction, updateTransaction } = useData();
+  const { getAccountOwner } = useOwners();
 
   const isEditing = Boolean(id);
 
@@ -120,7 +116,31 @@ export default function TransactionForm() {
     return buildInitialData(txn, entries, accounts, receivables);
   }, [id, transactions, entries, accounts, receivables]);
 
-  const [type, setType] = useState(initialData?.type ?? 'expense');
+  // Refund-from-expense flow: ?refund_of=<txn_id> pre-populates a refund form
+  const refundInitialData = useMemo(() => {
+    if (!refundOfId) return null;
+    const sourceTxn = transactions.find((t) => String(t.id) === String(refundOfId));
+    if (!sourceTxn) return null;
+    const refundCategory = categories.find((c) => c.role === 'refund');
+    if (!refundCategory) return null;
+
+    const sourceEntries = entries.filter((e) => e.transaction_id === sourceTxn.id);
+    const creditEntry = sourceEntries.find((e) => e.entry_type === 'CREDIT' && e.account_id);
+
+    return {
+      type: 'income',
+      date: new Date().toISOString().slice(0, 10),
+      amount: creditEntry?.amount ?? '',
+      to_account_id: creditEntry?.account_id ?? '',
+      owner: creditEntry?.account_id ? getAccountOwner(creditEntry.account_id) : '',
+      category_id: refundCategory.id,
+      source_transaction_id: sourceTxn.id,
+    };
+  }, [refundOfId, transactions, entries, categories, getAccountOwner]);
+
+  const [type, setType] = useState(
+    refundInitialData?.type ?? initialData?.type ?? 'expense'
+  );
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(transactionData) {
@@ -142,6 +162,8 @@ export default function TransactionForm() {
 
   // When type changes during editing, only carry over shared fields
   const formInitialData = (() => {
+    // Refund-from-expense flow takes precedence
+    if (refundInitialData) return refundInitialData;
     if (!initialData) return null;
     if (type === initialData.type) return initialData;
     // Type changed — keep only shared fields, clear type-specific ones
@@ -168,7 +190,6 @@ export default function TransactionForm() {
       case 'transfer':      return <TransferForm {...formProps} />;
       case 'bill_payment':  return <BillPaymentForm {...formProps} />;
       case 'investment':    return <InvestmentForm {...formProps} />;
-      case 'cashback':      return <CashbackForm {...formProps} />;
       case 'split_expense': return <SplitExpenseForm {...formProps} />;
       case 'reimbursement': return <ReimbursementForm {...formProps} />;
       default:              return null;

@@ -10,7 +10,6 @@ import { transactionTypeLabel } from '../../utils/formatters';
 function amountVariant(type) {
   if (
     type === 'income' ||
-    type === 'cashback' ||
     type === 'reimbursement'
   ) {
     return 'income';

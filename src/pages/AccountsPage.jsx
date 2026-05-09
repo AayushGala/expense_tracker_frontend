@@ -8,6 +8,7 @@ import EmptyState from '../components/common/EmptyState';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Modal from '../components/common/Modal';
 import Dropdown from '../components/common/Dropdown';
+import TransactionDetail from '../components/transactions/TransactionDetail';
 import { formatDate } from '../utils/formatters';
 
 // ---------------------------------------------------------------------------
@@ -54,7 +55,7 @@ function AccountTypeBadge({ type, subType }) {
 // AccountLedger — displayed inside a modal
 // ---------------------------------------------------------------------------
 
-function AccountLedger({ account, ledger, transactions }) {
+function AccountLedger({ account, ledger, transactions, onEntryClick }) {
   // Build a lookup for transaction descriptions
   const txnMap = useMemo(
     () => new Map((transactions ?? []).map((t) => [t.id, t])),
@@ -87,9 +88,16 @@ function AccountLedger({ account, ledger, transactions }) {
         const label = txnLabel(entry);
         const isDebit = entry.entry_type === 'DEBIT';
         const isPositive = isDebitNormal ? isDebit : !isDebit;
+        const txn = txnMap.get(entry.transaction_id);
 
         return (
-          <div key={entry.id} className="flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3">
+          <button
+            key={entry.id}
+            type="button"
+            onClick={() => txn && onEntryClick?.(txn)}
+            disabled={!txn}
+            className="w-full flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3 text-left hover:bg-gray-100 transition-colors disabled:cursor-default disabled:hover:bg-gray-50"
+          >
             {/* Details */}
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-medium text-gray-800 truncate">
@@ -113,7 +121,7 @@ function AccountLedger({ account, ledger, transactions }) {
             }`}>
               {isPositive ? '+' : '-'}₹{entry.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </p>
-          </div>
+          </button>
         );
       })}
     </div>
@@ -228,11 +236,12 @@ function AccountSection({ title, accounts, getBalance, onAccountClick, balanceSu
 // ---------------------------------------------------------------------------
 
 export default function AccountsPage() {
-  const { isLoading, transactions } = useData();
+  const { isLoading, transactions, entries } = useData();
   const { accountsByType, getAccountBalance, getAccountLedger } = useAccounts();
   const { owners, ownerOptions } = useOwners();
 
   const [ledgerAccount, setLedgerAccount] = useState(null); // account object | null
+  const [selectedTxn, setSelectedTxn] = useState(null);
   const [ownerFilter, setOwnerFilter] = useState('');
 
   // Filter accounts by owner when a filter is active
@@ -380,8 +389,31 @@ export default function AccountsPage() {
             </div>
 
             {/* Entries */}
-            <AccountLedger account={ledgerAccount} ledger={ledgerEntries} transactions={transactions} />
+            <AccountLedger
+              account={ledgerAccount}
+              ledger={ledgerEntries}
+              transactions={transactions}
+              onEntryClick={setSelectedTxn}
+            />
           </div>
+        )}
+      </Modal>
+
+      {/* Transaction Detail modal (opens on top of the ledger when an entry is clicked) */}
+      <Modal
+        isOpen={selectedTxn !== null}
+        onClose={() => setSelectedTxn(null)}
+        title="Transaction Details"
+        maxWidth="max-w-lg"
+      >
+        {selectedTxn && (
+          <TransactionDetail
+            transaction={selectedTxn}
+            entries={entries.filter((e) => e.transaction_id === selectedTxn.id)}
+            onClose={() => setSelectedTxn(null)}
+            onDeleted={() => setSelectedTxn(null)}
+            onSelectTransaction={setSelectedTxn}
+          />
         )}
       </Modal>
     </div>

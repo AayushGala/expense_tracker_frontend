@@ -94,7 +94,6 @@ export function transactionTypeLabel(type) {
     transfer: 'Transfer',
     bill_payment: 'Bill Payment',
     investment: 'Investment',
-    cashback: 'Cashback',
     split_expense: 'Split Expense',
     reimbursement: 'Reimbursement',
   };
@@ -115,7 +114,6 @@ export function transactionTypeColor(type) {
     transfer: 'text-blue-500',
     bill_payment: 'text-orange-500',
     investment: 'text-purple-500',
-    cashback: 'text-accent',
     split_expense: 'text-yellow-500',
     reimbursement: 'text-cyan-500',
   };

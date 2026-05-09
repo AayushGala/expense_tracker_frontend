@@ -14,7 +14,6 @@ const TRANSACTION_TYPES = [
   { value: 'transfer',      label: 'Transfer' },
   { value: 'bill_payment',  label: 'Bill Payment' },
   { value: 'investment',    label: 'Investment' },
-  { value: 'cashback',      label: 'Cashback' },
   { value: 'split_expense', label: 'Split Expense' },
   { value: 'reimbursement', label: 'Reimbursement' },
 ];

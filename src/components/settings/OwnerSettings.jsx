@@ -126,7 +126,7 @@ export default function OwnerSettings() {
             <tbody className="divide-y divide-gray-100">
               {[
                 ['Expense', 'Who the expense belongs to (not necessarily who paid)'],
-                ['Income', 'Who earned it (e.g. whose salary, whose cashback)'],
+                ['Income', 'Who earned it (e.g. whose salary, whose refund)'],
                 ['Transfer', 'Either person or blank — it\'s just money moving'],
                 ['Bill Payment', 'Who the credit card/loan belongs to'],
                 ['Investment', 'Who the investment is for'],

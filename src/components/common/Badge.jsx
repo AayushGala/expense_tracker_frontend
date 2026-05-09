@@ -6,7 +6,6 @@ const TYPE_STYLES = {
   transfer:      'bg-gray-100 text-gray-600 ring-gray-200/60',
   bill_payment:  'bg-brand text-white ring-brand/20',
   investment:    'bg-gray-100 text-gray-600 ring-gray-200/60',
-  cashback:      'bg-accent-light text-brand ring-accent/30',
   split_expense: 'bg-brand text-white ring-brand/20',
   reimbursement: 'bg-accent-light text-brand ring-accent/30',
 };

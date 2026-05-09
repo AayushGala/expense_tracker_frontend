@@ -7,7 +7,6 @@ const TRANSACTION_TYPES = [
   'bill_payment',
   'investment',
   'split_expense',
-  'cashback',
   'reimbursement',
 ];
 

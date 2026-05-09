@@ -166,7 +166,14 @@ function CategoryRow({ category, onEdit, onDelete, onAddSub, onEditSub, onDelete
               >
                 Edit
               </button>
-              {confirmDelete ? (
+              {category.role ? (
+                <span
+                  title="Cannot delete a protected category. Rename instead."
+                  className="text-xs text-gray-300 px-2 py-1 cursor-not-allowed"
+                >
+                  Delete
+                </span>
+              ) : confirmDelete ? (
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => { onDelete(category.id); setConfirmDelete(false); }}

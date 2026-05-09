@@ -3,17 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { formatDate, formatINR, transactionTypeLabel } from '../../utils/formatters';
 import Badge from '../common/Badge';
-import AmountDisplay from '../common/AmountDisplay';
-import { getVariant } from '../common/TypeIcon';
 
 export default function TransactionDetail({
   transaction,
   entries = [],
   onClose,
   onDeleted,
+  onSelectTransaction,
 }) {
   const navigate = useNavigate();
-  const { accounts, categories, deleteTransaction } = useData();
+  const { accounts, categories, transactions, entries: allEntries, deleteTransaction } = useData();
 
   const accountMap = useMemo(
     () => new Map(accounts.map((a) => [a.id, a])),
@@ -45,6 +44,51 @@ export default function TransactionDetail({
     onClose();
   }
 
+  function handleRefund() {
+    navigate(`/transactions/new?refund_of=${transaction.id}`);
+    onClose();
+  }
+
+  // Source transaction link (for refunds and any income with source set)
+  const sourceTransactionId = transaction.source_transaction ?? null;
+  const sourceTxn = useMemo(() => {
+    if (!sourceTransactionId) return null;
+    return transactions.find((t) => t.id === sourceTransactionId) ?? null;
+  }, [transactions, sourceTransactionId]);
+
+  function handleOpenSource() {
+    if (!sourceTxn) return;
+    if (onSelectTransaction) {
+      onSelectTransaction(sourceTxn);
+    } else {
+      navigate('/transactions');
+      onClose();
+    }
+  }
+
+  function handleOpenLinkedRefund(refund) {
+    if (onSelectTransaction) {
+      onSelectTransaction(refund);
+    } else {
+      navigate('/transactions');
+      onClose();
+    }
+  }
+
+  // Refunds attached to this transaction (only meaningful for expenses)
+  const linkedRefunds = useMemo(() => {
+    return transactions
+      .filter((t) => t.source_transaction === transaction.id)
+      .map((t) => {
+        const txnEntries = allEntries.filter((e) => e.transaction_id === t.id);
+        const debitEntry = txnEntries.find((e) => e.entry_type === 'DEBIT' && e.account_id);
+        return { ...t, amount: debitEntry?.amount ?? 0 };
+      })
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [transactions, allEntries, transaction.id]);
+
+  const totalRefunded = linkedRefunds.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+
   const {
     type, amount, date, notes, beneficiary, platform, tags,
     category_id, created_at,
@@ -61,7 +105,7 @@ export default function TransactionDetail({
   let toName = null;
   if (type === 'expense' || type === 'split_expense') {
     fromName = creditAccount ? accountMap.get(creditAccount.account_id)?.name : null;
-  } else if (type === 'income' || type === 'cashback' || type === 'reimbursement') {
+  } else if (type === 'income' || type === 'reimbursement') {
     toName = debitAccount ? accountMap.get(debitAccount.account_id)?.name : null;
   } else if (type === 'transfer' || type === 'bill_payment' || type === 'investment') {
     fromName = creditAccount ? accountMap.get(creditAccount.account_id)?.name : null;
@@ -101,6 +145,38 @@ export default function TransactionDetail({
           {formatINR(amount ?? 0)}
         </p>
       </div>
+
+      {/* Linked refunds (only for expenses with refunds attached) */}
+      {linkedRefunds.length > 0 && (
+        <div className="rounded-xl border border-accent/30 bg-accent-light/30 px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] uppercase tracking-wider text-brand font-semibold">
+              ↩ Refunded · {formatINR(totalRefunded)}
+            </p>
+            <p className="text-[11px] text-gray-400">
+              Net: {formatINR((amount ?? 0) - totalRefunded)}
+            </p>
+          </div>
+          <ul className="divide-y divide-accent/20 text-xs">
+            {linkedRefunds.map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => handleOpenLinkedRefund(r)}
+                  className="w-full flex items-center justify-between py-1.5 text-left rounded hover:bg-accent/10 transition-colors px-1 -mx-1"
+                >
+                  <span className="text-gray-600">
+                    {formatDate(r.date)}{r.notes ? ` · ${r.notes}` : ''}
+                  </span>
+                  <span className="font-semibold text-brand tabular-nums">
+                    {formatINR(r.amount)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Details grid */}
       {detailRows.length > 0 && (
@@ -149,18 +225,44 @@ export default function TransactionDetail({
         </div>
       )}
 
+      {/* Source-transaction link (refunds and other linked income) */}
+      {sourceTxn && (
+        <button
+          type="button"
+          onClick={handleOpenSource}
+          className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-left text-xs text-gray-500 hover:bg-gray-50 transition-colors"
+        >
+          <span className="text-accent">↩</span>
+          <span>
+            <span className="text-gray-400">Refund of:</span>{' '}
+            <span className="font-medium text-gray-700">
+              {sourceTxn.notes || sourceTxn.beneficiary || 'Expense'} · {formatDate(sourceTxn.date)}
+            </span>
+          </span>
+        </button>
+      )}
+
       {/* Action buttons */}
-      <div className="flex gap-3 pt-1">
+      <div className="flex gap-2 pt-1 flex-wrap">
         <button
           onClick={handleEdit}
-          className="flex-1 rounded-xl bg-brand py-2.5 text-sm
+          className="flex-1 min-w-[100px] rounded-xl bg-brand py-2.5 text-sm
                      font-semibold text-white hover:bg-brand-hover transition-colors"
         >
           Edit
         </button>
+        {type === 'expense' && (
+          <button
+            onClick={handleRefund}
+            className="flex-1 min-w-[100px] rounded-xl border border-accent bg-accent-light py-2.5 text-sm
+                       font-semibold text-brand hover:bg-accent/30 transition-colors"
+          >
+            ↩ Refund
+          </button>
+        )}
         <button
           onClick={handleDelete}
-          className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm
+          className="flex-1 min-w-[100px] rounded-xl border border-gray-200 py-2.5 text-sm
                      font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
         >
           Delete

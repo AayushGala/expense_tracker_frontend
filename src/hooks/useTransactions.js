@@ -128,7 +128,7 @@ export function useTransactions(filters = {}) {
 
         // Compute display amount from entries (not stored on the transaction row).
         // For expense/split_expense/bill_payment/investment: sum of CREDIT entries on real accounts
-        // For income/cashback/reimbursement: sum of DEBIT entries on real accounts
+        // For income/reimbursement: sum of DEBIT entries on real accounts
         // For transfer: the transfer amount (either leg)
         let amount = txn.amount; // keep optimistic value if present
         if (amount === undefined || amount === null || amount === '') {

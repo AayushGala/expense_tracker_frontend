@@ -72,6 +72,13 @@
   outline-offset: 2px;
 }
 
+/* Table rows render outlines poorly (as horizontal bars). Use a clean
+   background highlight instead. */
+tr:focus-visible {
+  outline: none;
+  background-color: rgb(243 244 246); /* gray-100 */
+}
+
 /* Remove focus outline inside dropdown menus */
 [role="listbox"] button:focus-visible,
 [role="listbox"] button:focus {

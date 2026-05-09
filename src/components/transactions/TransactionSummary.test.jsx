@@ -13,6 +13,10 @@ describe('TransactionSummary', () => {
     transfer_amount: 0,
     investment_count: 0,
     investment_amount: 0,
+    bill_payment_count: 0,
+    bill_payment_amount: 0,
+    reimbursement_count: 0,
+    reimbursement_amount: 0,
   };
 
   it('shows loading message when loading without summary', () => {
@@ -55,43 +59,61 @@ describe('TransactionSummary', () => {
     expect(onSplitModeChange).toHaveBeenCalledWith('my_share');
   });
 
-  it('shows transfer exclusion when transfer_count > 0', () => {
+  it('shows transfer pill when transfer_count > 0', () => {
     const summary = { ...baseSummary, transfer_count: 3, transfer_amount: 15000 };
     render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
-    expect(screen.getByText(/3 transfers excluded/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 transfers/i)).toBeInTheDocument();
   });
 
   it('pluralizes transfer label correctly for single transfer', () => {
     const summary = { ...baseSummary, transfer_count: 1, transfer_amount: 5000 };
     render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
-    expect(screen.getByText(/1 transfer excluded/i)).toBeInTheDocument();
+    expect(screen.getByText(/^1 transfer$/i)).toBeInTheDocument();
   });
 
-  it('shows investment exclusion when investment_count > 0', () => {
+  it('shows investment pill when investment_count > 0', () => {
     const summary = { ...baseSummary, investment_count: 4, investment_amount: 25000 };
     render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
-    expect(screen.getByText(/4 investments excluded/i)).toBeInTheDocument();
+    expect(screen.getByText(/4 investments/i)).toBeInTheDocument();
   });
 
   it('pluralizes investment label correctly for single investment', () => {
     const summary = { ...baseSummary, investment_count: 1, investment_amount: 8000 };
     render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
-    expect(screen.getByText(/1 investment excluded/i)).toBeInTheDocument();
+    expect(screen.getByText(/^1 investment$/i)).toBeInTheDocument();
   });
 
-  it('shows both transfer and investment exclusions together', () => {
+  it('shows bill payment pill when bill_payment_count > 0', () => {
+    const summary = { ...baseSummary, bill_payment_count: 2, bill_payment_amount: 12000 };
+    render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
+    expect(screen.getByText(/2 bill payments/i)).toBeInTheDocument();
+  });
+
+  it('shows reimbursement pill when reimbursement_count > 0', () => {
+    const summary = { ...baseSummary, reimbursement_count: 1, reimbursement_amount: 3000 };
+    render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
+    expect(screen.getByText(/^1 reimbursement$/i)).toBeInTheDocument();
+  });
+
+  it('shows the "Other movements" header when at least one movement is present', () => {
+    const summary = { ...baseSummary, transfer_count: 1, transfer_amount: 100 };
+    render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
+    expect(screen.getByText(/other movements/i)).toBeInTheDocument();
+  });
+
+  it('shows multiple movement pills together', () => {
     const summary = {
       ...baseSummary,
       transfer_count: 2, transfer_amount: 10000,
       investment_count: 3, investment_amount: 18000,
     };
     render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
-    expect(screen.getByText(/2 transfers excluded/i)).toBeInTheDocument();
-    expect(screen.getByText(/3 investments excluded/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 transfers/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 investments/i)).toBeInTheDocument();
   });
 
-  it('hides exclusion section when both counts are zero', () => {
+  it('hides movements section when all counts are zero', () => {
     render(<TransactionSummary summary={baseSummary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
-    expect(screen.queryByText(/excluded/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/other movements/i)).not.toBeInTheDocument();
   });
 });

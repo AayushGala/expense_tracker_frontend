@@ -364,6 +364,7 @@ export default function TransactionsPage() {
             entries={getTransactionEntries(selectedTxn.id)}
             onClose={handleModalClose}
             onDeleted={() => { setSelectedTxn(null); }}
+            onSelectTransaction={setSelectedTxn}
           />
         )}
       </Modal>

@@ -26,7 +26,13 @@ export function categoryOptions(categories) {
   }
 
   const options = [];
-  const sorted = [...parents].sort((a, b) => a.name.localeCompare(b.name));
+  // Role-tagged categories (Cashback / Refund) sort first; rest alphabetical.
+  const sorted = [...parents].sort((a, b) => {
+    const aRole = a.role ? 0 : 1;
+    const bRole = b.role ? 0 : 1;
+    if (aRole !== bRole) return aRole - bRole;
+    return a.name.localeCompare(b.name);
+  });
 
   for (const parent of sorted) {
     const children = (childrenMap.get(parent.id) ?? []).sort((a, b) => a.name.localeCompare(b.name));

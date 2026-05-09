@@ -20,6 +20,16 @@ function StatBlock({ label, value, variant = 'neutral', format = 'currency' }) {
   );
 }
 
+function MovementPill({ icon, count, label, amount }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600">
+      <span aria-hidden>{icon}</span>
+      <span className="font-medium">{count} {label}{count === 1 ? '' : 's'}</span>
+      <span className="text-gray-400 tabular-nums">{formatINR(amount)}</span>
+    </span>
+  );
+}
+
 export default function TransactionSummary({ summary, isLoading, splitMode, onSplitModeChange }) {
   if (isLoading && !summary) {
     return (
@@ -28,8 +38,12 @@ export default function TransactionSummary({ summary, isLoading, splitMode, onSp
   }
   if (!summary) return null;
 
-  const hasTransfers = summary.transfer_count > 0;
-  const hasInvestments = summary.investment_count > 0;
+  const movements = [
+    { key: 'transfer', icon: '↔', label: 'transfer', count: summary.transfer_count, amount: summary.transfer_amount },
+    { key: 'investment', icon: '📈', label: 'investment', count: summary.investment_count, amount: summary.investment_amount },
+    { key: 'bill_payment', icon: '💳', label: 'bill payment', count: summary.bill_payment_count, amount: summary.bill_payment_amount },
+    { key: 'reimbursement', icon: '↩', label: 'reimbursement', count: summary.reimbursement_count, amount: summary.reimbursement_amount },
+  ].filter((m) => (m.count ?? 0) > 0);
 
   return (
     <div className="px-5 py-4 space-y-3">
@@ -40,7 +54,7 @@ export default function TransactionSummary({ summary, isLoading, splitMode, onSp
         <StatBlock label="Count" value={summary.count} format="plain" />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-100">
+      <div className="pt-2 border-t border-gray-100 space-y-3">
         <div className="flex items-center gap-3">
           <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
             Split expenses:
@@ -71,20 +85,22 @@ export default function TransactionSummary({ summary, isLoading, splitMode, onSp
           </div>
         </div>
 
-        {(hasTransfers || hasInvestments) && (
-          <div className="flex flex-col items-end gap-0.5 text-xs text-gray-400">
-            {hasTransfers && (
-              <p>
-                {summary.transfer_count} transfer{summary.transfer_count === 1 ? '' : 's'} excluded
-                {' '}({formatINR(summary.transfer_amount)})
-              </p>
-            )}
-            {hasInvestments && (
-              <p>
-                {summary.investment_count} investment{summary.investment_count === 1 ? '' : 's'} excluded
-                {' '}({formatINR(summary.investment_amount)})
-              </p>
-            )}
+        {movements.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">
+              Other movements (not counted above)
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {movements.map((m) => (
+                <MovementPill
+                  key={m.key}
+                  icon={m.icon}
+                  count={m.count}
+                  label={m.label}
+                  amount={m.amount}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>

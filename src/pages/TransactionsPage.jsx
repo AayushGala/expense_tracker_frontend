@@ -53,14 +53,14 @@ function TransactionRow({ txn, onClick }) {
 
       {/* Description with icon */}
       <td className="py-4 px-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
           <TypeIcon type={txn.type} />
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">
+            <p className="text-sm font-semibold text-gray-900 break-words">
               {txn.notes || transactionTypeLabel(txn.type)}
             </p>
             {(txn.accountNames?.length > 0 || txn.platform) && (
-              <p className="text-xs text-gray-400 truncate mt-0.5">
+              <p className="text-xs text-gray-400 break-words mt-0.5">
                 {[txn.accountNames?.join(' · '), txn.platform].filter(Boolean).join(' · ')}
               </p>
             )}
@@ -102,14 +102,14 @@ function TransactionCard({ txn, onClick }) {
   return (
     <button
       onClick={() => onClick(txn)}
-      className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-gray-50/80 transition-colors"
+      className="w-full flex items-start gap-3 px-4 py-3.5 text-left hover:bg-gray-50/80 transition-colors"
     >
       <TypeIcon type={txn.type} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900 truncate">
+        <p className="text-sm font-semibold text-gray-900 break-words">
           {txn.notes || transactionTypeLabel(txn.type)}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-gray-400 mt-0.5 break-words">
           {formatDate(txn.date)}
           {txn.categoryNames?.length > 0 && ` · ${txn.categoryNames[0]}`}
           {txn.platform && ` · ${txn.platform}`}

@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import Card from '../common/Card';
-import Dropdown from '../common/Dropdown';
+import MultiSelect from '../common/MultiSelect';
 import CategoryFilter from '../common/CategoryFilter';
 import { useReports } from '../../hooks/useReports';
 import { useOwners } from '../../hooks/useOwners';
@@ -39,15 +39,17 @@ export default function SpendingTrends() {
   const { owners, ownerOptions } = useOwners();
 
   const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
-  const [selectedOwner, setSelectedOwner] = useState('');
-  const [selectedBeneficiary, setSelectedBeneficiary] = useState('');
+  const [selectedOwners, setSelectedOwners] = useState([]);
+  const [selectedBeneficiaries, setSelectedBeneficiaries] = useState([]);
+
+  const ownerMultiOptions = useMemo(
+    () => ownerOptions.filter((o) => o.value !== ''),
+    [ownerOptions]
+  );
 
   const beneficiaryOptions = useMemo(() => {
     const set = new Set(transactions.map((t) => t.beneficiary).filter(Boolean));
-    return [
-      { value: '', label: 'All Beneficiaries' },
-      ...[...set].sort((a, b) => a.localeCompare(b)).map((b) => ({ value: b, label: b })),
-    ];
+    return [...set].sort((a, b) => a.localeCompare(b)).map((b) => ({ value: b, label: b }));
   }, [transactions]);
 
   const data = useMemo(
@@ -55,13 +57,13 @@ export default function SpendingTrends() {
       spendingTrends(
         selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
         12,
-        selectedOwner || undefined,
-        selectedBeneficiary || undefined
+        selectedOwners,
+        selectedBeneficiaries
       ).map((d) => ({
         ...d,
         label: shortMonth(d.month),
       })),
-    [spendingTrends, selectedCategoryIds, selectedOwner, selectedBeneficiary]
+    [spendingTrends, selectedCategoryIds, selectedOwners, selectedBeneficiaries]
   );
 
   const total = useMemo(() => data.reduce((s, d) => s + d.total, 0), [data]);
@@ -69,14 +71,14 @@ export default function SpendingTrends() {
   const avg = nonZero.length ? total / nonZero.length : 0;
   const peak = useMemo(() => Math.max(0, ...data.map((d) => d.total)), [data]);
 
-  // Transaction list — filtered by type=expense, optionally by categories, owner, beneficiary
+  // Transaction list — filtered by type=expense, optionally by categories, owners, beneficiaries
   const txnFilters = useMemo(() => {
-    const f = { type: 'expense' };
+    const f = { types: ['expense'] };
     if (selectedCategoryIds.length > 0) f.categoryIds = selectedCategoryIds;
-    if (selectedOwner) f.owner = selectedOwner;
-    if (selectedBeneficiary) f.beneficiary = selectedBeneficiary;
+    if (selectedOwners.length > 0) f.owners = selectedOwners;
+    if (selectedBeneficiaries.length > 0) f.beneficiaries = selectedBeneficiaries;
     return f;
-  }, [selectedCategoryIds, selectedOwner, selectedBeneficiary]);
+  }, [selectedCategoryIds, selectedOwners, selectedBeneficiaries]);
 
   const { filteredTransactions } = useTransactions(txnFilters);
 
@@ -94,18 +96,22 @@ export default function SpendingTrends() {
       <div className="flex flex-wrap items-center gap-3 min-h-[44px]">
         <h2 className="text-base font-bold text-gray-900 flex-1">Spending</h2>
         {owners.length > 0 && (
-          <Dropdown
-            value={selectedOwner}
-            onChange={setSelectedOwner}
-            options={ownerOptions}
+          <MultiSelect
+            value={selectedOwners}
+            onChange={setSelectedOwners}
+            options={ownerMultiOptions}
+            placeholder="All Owners"
+            singularLabel="owner"
             className="min-w-[130px]"
           />
         )}
-        {beneficiaryOptions.length > 1 && (
-          <Dropdown
-            value={selectedBeneficiary}
-            onChange={setSelectedBeneficiary}
+        {beneficiaryOptions.length > 0 && (
+          <MultiSelect
+            value={selectedBeneficiaries}
+            onChange={setSelectedBeneficiaries}
             options={beneficiaryOptions}
+            placeholder="All Beneficiaries"
+            singularLabel="beneficiary"
             className="min-w-[150px]"
           />
         )}

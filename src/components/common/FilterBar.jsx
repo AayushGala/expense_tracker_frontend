@@ -3,12 +3,12 @@ import { useData } from '../../context/DataContext';
 import { useOwners } from '../../hooks/useOwners';
 import api from '../../api/client';
 import Dropdown from './Dropdown';
+import MultiSelect from './MultiSelect';
 import CategoryFilter from './CategoryFilter';
 import CalendarPicker from './CalendarPicker';
 import { DATE_PRESETS, detectPreset } from '../../utils/datePresets';
 
 const TRANSACTION_TYPES = [
-  { value: '',              label: 'All Types' },
   { value: 'expense',       label: 'Expense' },
   { value: 'income',        label: 'Income' },
   { value: 'transfer',      label: 'Transfer' },
@@ -22,22 +22,14 @@ export default function FilterBar({ filters = {}, onChange, onBulkChange, onRese
   const { accounts, categories, transactions } = useData();
   const { ownerOptions } = useOwners();
 
-  const accountOptions = [
-    { value: '', label: 'All Accounts' },
-    ...accounts
-      .filter((a) => !a._removed)
-      .map((a) => ({ value: a.id, label: a.name })),
-  ];
+  const accountOptions = accounts
+    .filter((a) => !a._removed)
+    .map((a) => ({ value: a.id, label: a.name }));
 
   const categoryIds = filters.categoryIds ?? [];
 
-  const beneficiaryOptions = [
-    { value: '', label: 'Beneficiary' },
-    ...[...new Set(transactions.map((t) => t.beneficiary).filter(Boolean))].map((b) => ({
-      value: b,
-      label: b,
-    })),
-  ];
+  const beneficiaryOptions = [...new Set(transactions.map((t) => t.beneficiary).filter(Boolean))]
+    .map((b) => ({ value: b, label: b }));
 
   const [platformList, setPlatformList] = useState([]);
   const [tagList, setTagList] = useState([]);
@@ -51,15 +43,9 @@ export default function FilterBar({ filters = {}, onChange, onBulkChange, onRese
     }).catch(() => {});
   }, []);
 
-  const platformOptions = [
-    { value: '', label: 'Platform' },
-    ...platformList.map((p) => ({ value: p, label: p })),
-  ];
-
-  const tagOptions = [
-    { value: '', label: 'Tag' },
-    ...tagList.map((t) => ({ value: t, label: t })),
-  ];
+  const platformOptions = platformList.map((p) => ({ value: p, label: p }));
+  const tagOptions = tagList.map((t) => ({ value: t, label: t }));
+  const ownerMultiOptions = ownerOptions.filter((o) => o.value !== '');
 
   const hasActiveFilters = Object.values(filters).some((v) => {
     if (Array.isArray(v)) return v.length > 0;
@@ -108,18 +94,22 @@ export default function FilterBar({ filters = {}, onChange, onBulkChange, onRese
       </div>
 
       {/* Type */}
-      <Dropdown
-        value={filters.type ?? ''}
-        onChange={(val) => onChange('type', val)}
+      <MultiSelect
+        value={filters.types ?? []}
+        onChange={(arr) => onChange('types', arr)}
         options={TRANSACTION_TYPES}
+        placeholder="All Types"
+        singularLabel="type"
         className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-[140px] sm:flex-none"
       />
 
       {/* Account */}
-      <Dropdown
-        value={filters.accountId ?? ''}
-        onChange={(val) => onChange('accountId', val)}
+      <MultiSelect
+        value={filters.accountIds ?? []}
+        onChange={(arr) => onChange('accountIds', arr)}
         options={accountOptions}
+        placeholder="All Accounts"
+        singularLabel="account"
         className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-[150px] sm:flex-none"
       />
 
@@ -132,37 +122,45 @@ export default function FilterBar({ filters = {}, onChange, onBulkChange, onRese
       />
 
       {/* Owner */}
-      {ownerOptions.length > 1 && (
-        <Dropdown
-          value={filters.owner ?? ''}
-          onChange={(val) => onChange('owner', val)}
-          options={[{ value: '', label: 'Owner' }, ...ownerOptions.filter((o) => o.value !== '')]}
+      {ownerMultiOptions.length > 0 && (
+        <MultiSelect
+          value={filters.owners ?? []}
+          onChange={(arr) => onChange('owners', arr)}
+          options={ownerMultiOptions}
+          placeholder="Owner"
+          singularLabel="owner"
           className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-[120px] sm:flex-none"
         />
       )}
 
       {/* Platform */}
-      <Dropdown
-        value={filters.platform ?? ''}
-        onChange={(val) => onChange('platform', val)}
+      <MultiSelect
+        value={filters.platforms ?? []}
+        onChange={(arr) => onChange('platforms', arr)}
         options={platformOptions}
+        placeholder="Platform"
+        singularLabel="platform"
         className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-[130px] sm:flex-none"
       />
 
       {/* Tag */}
-      <Dropdown
-        value={filters.tag ?? ''}
-        onChange={(val) => onChange('tag', val)}
+      <MultiSelect
+        value={filters.tags ?? []}
+        onChange={(arr) => onChange('tags', arr)}
         options={tagOptions}
+        placeholder="Tag"
+        singularLabel="tag"
         className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-[120px] sm:flex-none"
       />
 
       {/* Beneficiary */}
-      {beneficiaryOptions.length > 1 && (
-        <Dropdown
-          value={filters.beneficiary ?? ''}
-          onChange={(val) => onChange('beneficiary', val)}
+      {beneficiaryOptions.length > 0 && (
+        <MultiSelect
+          value={filters.beneficiaries ?? []}
+          onChange={(arr) => onChange('beneficiaries', arr)}
           options={beneficiaryOptions}
+          placeholder="Beneficiary"
+          singularLabel="beneficiary"
           className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-[130px] sm:flex-none"
         />
       )}

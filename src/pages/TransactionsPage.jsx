@@ -187,12 +187,13 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
 const EMPTY_FILTERS = {
   dateFrom: '',
   dateTo: '',
-  type: '',
-  accountId: '',
+  types: [],
+  accountIds: [],
   categoryIds: [],
-  beneficiary: '',
-  platform: '',
-  tag: '',
+  owners: [],
+  beneficiaries: [],
+  platforms: [],
+  tags: [],
   search: '',
 };
 

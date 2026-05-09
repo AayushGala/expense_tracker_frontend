@@ -1,19 +1,37 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
 
+/**
+ * Build URLSearchParams using repeated keys for multi-value filters
+ * (HTTP-standard array encoding: ?type=expense&type=income).
+ */
 function buildParams(filters, splitMode) {
-  const params = {};
-  if (filters.dateFrom) params.date_from = filters.dateFrom;
-  if (filters.dateTo) params.date_to = filters.dateTo;
-  if (filters.type) params.type = filters.type;
-  if (filters.accountId) params.account_id = filters.accountId;
-  if (filters.categoryIds?.length > 0) params.category_ids = filters.categoryIds.join(',');
-  if (filters.beneficiary) params.beneficiary = filters.beneficiary;
-  if (filters.owner) params.owner = filters.owner;
-  if (filters.platform) params.platform = filters.platform;
-  if (filters.tag) params.tag = filters.tag;
-  if (filters.search) params.search = filters.search;
-  if (splitMode) params.split_mode = splitMode;
+  const params = new URLSearchParams();
+
+  if (filters.dateFrom) params.set('date_from', filters.dateFrom);
+  if (filters.dateTo) params.set('date_to', filters.dateTo);
+
+  const appendEach = (key, values) => {
+    if (!values || values.length === 0) return;
+    for (const v of values) params.append(key, v);
+  };
+
+  appendEach('type', filters.types);
+  appendEach('account_id', filters.accountIds);
+  appendEach('beneficiary', filters.beneficiaries);
+  appendEach('owner', filters.owners);
+  appendEach('platform', filters.platforms);
+  appendEach('tag', filters.tags);
+
+  // category_ids stays as a single CSV param — backend already special-cases it
+  // for the existing list-endpoint filtering and the new code paths use the same
+  // backend filter, so we keep that param unchanged.
+  if (filters.categoryIds?.length > 0) {
+    params.set('category_ids', filters.categoryIds.join(','));
+  }
+
+  if (filters.search) params.set('search', filters.search);
+  if (splitMode) params.set('split_mode', splitMode);
   return params;
 }
 

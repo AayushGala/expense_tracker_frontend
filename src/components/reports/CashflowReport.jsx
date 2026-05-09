@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import Card from '../common/Card';
-import Dropdown from '../common/Dropdown';
+import MultiSelect from '../common/MultiSelect';
 import { useReports } from '../../hooks/useReports';
 import { useOwners } from '../../hooks/useOwners';
 import { useData } from '../../context/DataContext';
@@ -41,24 +41,26 @@ export default function CashflowReport() {
   const { owners, ownerOptions } = useOwners();
   const { transactions } = useData();
 
-  const [selectedOwner, setSelectedOwner] = useState('');
-  const [selectedBeneficiary, setSelectedBeneficiary] = useState('');
+  const [selectedOwners, setSelectedOwners] = useState([]);
+  const [selectedBeneficiaries, setSelectedBeneficiaries] = useState([]);
+
+  const ownerMultiOptions = useMemo(
+    () => ownerOptions.filter((o) => o.value !== ''),
+    [ownerOptions]
+  );
 
   const beneficiaryOptions = useMemo(() => {
     const set = new Set(transactions.map((t) => t.beneficiary).filter(Boolean));
-    return [
-      { value: '', label: 'All Beneficiaries' },
-      ...[...set].sort((a, b) => a.localeCompare(b)).map((b) => ({ value: b, label: b })),
-    ];
+    return [...set].sort((a, b) => a.localeCompare(b)).map((b) => ({ value: b, label: b }));
   }, [transactions]);
 
   const data = useMemo(
     () =>
-      cashflow(12, selectedOwner || undefined, selectedBeneficiary || undefined).map((d) => ({
+      cashflow(12, selectedOwners, selectedBeneficiaries).map((d) => ({
         ...d,
         label: shortMonth(d.month),
       })),
-    [cashflow, selectedOwner, selectedBeneficiary]
+    [cashflow, selectedOwners, selectedBeneficiaries]
   );
 
   const totals = useMemo(
@@ -81,18 +83,22 @@ export default function CashflowReport() {
       <div className="flex flex-wrap items-center gap-3 min-h-[44px]">
         <h2 className="text-base font-bold text-gray-900 flex-1">Cashflow — Last 12 Months</h2>
         {owners.length > 0 && (
-          <Dropdown
-            value={selectedOwner}
-            onChange={setSelectedOwner}
-            options={ownerOptions}
+          <MultiSelect
+            value={selectedOwners}
+            onChange={setSelectedOwners}
+            options={ownerMultiOptions}
+            placeholder="All Owners"
+            singularLabel="owner"
             className="min-w-[130px]"
           />
         )}
-        {beneficiaryOptions.length > 1 && (
-          <Dropdown
-            value={selectedBeneficiary}
-            onChange={setSelectedBeneficiary}
+        {beneficiaryOptions.length > 0 && (
+          <MultiSelect
+            value={selectedBeneficiaries}
+            onChange={setSelectedBeneficiaries}
             options={beneficiaryOptions}
+            placeholder="All Beneficiaries"
+            singularLabel="beneficiary"
             className="min-w-[150px]"
           />
         )}

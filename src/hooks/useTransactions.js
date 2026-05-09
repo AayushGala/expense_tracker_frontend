@@ -3,21 +3,24 @@ import { useData } from '../context/DataContext';
 
 /**
  * Custom hook for filtering and enriching transactions.
- *
- * @param {Object} [filters]
- * @param {string} [filters.dateFrom]    - ISO date string, inclusive lower bound
- * @param {string} [filters.dateTo]      - ISO date string, inclusive upper bound
- * @param {string} [filters.type]        - transaction type (e.g. "expense")
- * @param {string} [filters.accountId]   - only transactions with an entry on this account
- * @param {string} [filters.categoryId]  - only transactions with an entry on this category
- * @param {string} [filters.beneficiary] - match against transaction.beneficiary
- * @param {string} [filters.owner]      - match against transaction.owner
- * @param {string} [filters.search]      - free-text search against notes/beneficiary
+ * Multi-value filters (types, accountIds, owners, etc.) match if ANY value matches.
  */
 export function useTransactions(filters = {}) {
   const { transactions, entries, accounts, categories } = useData();
 
-  const { dateFrom, dateTo, type, accountId, categoryIds, beneficiary, platform, tag, owner, search } = filters;
+  const {
+    dateFrom, dateTo,
+    types, accountIds, categoryIds, owners, platforms, tags, beneficiaries,
+    search,
+  } = filters;
+
+  const hasTypes = types && types.length > 0;
+  const hasAccounts = accountIds && accountIds.length > 0;
+  const hasCategoryFilter = categoryIds && categoryIds.length > 0;
+  const hasOwners = owners && owners.length > 0;
+  const hasPlatforms = platforms && platforms.length > 0;
+  const hasTagsFilter = tags && tags.length > 0;
+  const hasBeneficiaries = beneficiaries && beneficiaries.length > 0;
 
   // Build lookup maps once
   const accountMap = useMemo(
@@ -66,29 +69,28 @@ export function useTransactions(filters = {}) {
           if (toMs !== null && txnMs > toMs) return false;
         }
 
-        // Transaction type
-        if (type && txn.type !== type) return false;
+        // Transaction type (any-of)
+        if (hasTypes && !types.includes(txn.type)) return false;
 
-        // Beneficiary exact match
-        if (beneficiary && txn.beneficiary !== beneficiary) return false;
+        // Beneficiary (any-of)
+        if (hasBeneficiaries && !beneficiaries.includes(txn.beneficiary)) return false;
 
-        // Owner exact match
-        if (owner && txn.owner !== owner) return false;
+        // Owner (any-of)
+        if (hasOwners && !owners.includes(txn.owner)) return false;
 
-        // Platform exact match
-        if (platform && txn.platform !== platform) return false;
+        // Platform (any-of)
+        if (hasPlatforms && !platforms.includes(txn.platform)) return false;
 
-        // Tag match — check if the tag appears in the comma-separated tags string
-        if (tag) {
-          const txnTags = String(txn.tags ?? '').split(',').map((s) => s.trim());
-          if (!txnTags.includes(tag)) return false;
+        // Tag (any-of) — match if any selected tag appears in the comma-separated tags string
+        if (hasTagsFilter) {
+          const txnTags = String(txn.tags ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+          if (!tags.some((t) => txnTags.includes(t))) return false;
         }
 
         // Account / category filter
-        const hasCategoryFilter = categoryIds && categoryIds.length > 0;
-        if (accountId || hasCategoryFilter) {
+        if (hasAccounts || hasCategoryFilter) {
           const txnEntries = entriesByTxn.get(txn.id) ?? [];
-          if (accountId && !txnEntries.some((e) => e.account_id === accountId)) {
+          if (hasAccounts && !txnEntries.some((e) => accountIds.includes(e.account_id))) {
             return false;
           }
           if (hasCategoryFilter) {
@@ -164,14 +166,21 @@ export function useTransactions(filters = {}) {
     categoryMap,
     dateFrom,
     dateTo,
-    type,
-    accountId,
+    types,
+    accountIds,
     categoryIds,
-    beneficiary,
-    platform,
-    tag,
-    owner,
+    owners,
+    platforms,
+    tags,
+    beneficiaries,
     search,
+    hasTypes,
+    hasAccounts,
+    hasCategoryFilter,
+    hasOwners,
+    hasPlatforms,
+    hasTagsFilter,
+    hasBeneficiaries,
   ]);
 
   return {

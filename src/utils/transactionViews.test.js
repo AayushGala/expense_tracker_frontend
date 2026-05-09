@@ -4,6 +4,7 @@ import {
   serializeViews,
   makeView,
   findMatchingView,
+  migrateFilters,
 } from './transactionViews';
 
 describe('parseViews', () => {
@@ -27,17 +28,17 @@ describe('parseViews', () => {
     expect(parseViews(JSON.stringify(views))).toEqual(views);
   });
 
-  it('passes through array values unchanged', () => {
+  it('passes through array values (re-mapped after migration)', () => {
     const views = [{ id: 'v_1', name: 'a', filters: {} }];
-    expect(parseViews(views)).toBe(views);
+    expect(parseViews(views)).toEqual(views);
   });
 });
 
 describe('serializeViews', () => {
-  it('round-trips through parseViews', () => {
+  it('round-trips through parseViews when filters are already in plural form', () => {
     const views = [
-      { id: 'v_1', name: 'Food', filters: { type: 'expense', categoryIds: [3, 1] } },
-      { id: 'v_2', name: 'Salary', filters: { type: 'income' } },
+      { id: 'v_1', name: 'Food', filters: { types: ['expense'], categoryIds: [3, 1] } },
+      { id: 'v_2', name: 'Salary', filters: { types: ['income'] } },
     ];
     expect(parseViews(serializeViews(views))).toEqual(views);
   });
@@ -63,6 +64,56 @@ describe('makeView', () => {
     const v = makeView('x', filters);
     filters.type = 'income';
     expect(v.filters.type).toBe('expense');
+  });
+});
+
+describe('migrateFilters', () => {
+  it('converts legacy single-value keys into plural arrays', () => {
+    const out = migrateFilters({
+      type: 'expense',
+      accountId: 5,
+      owner: 'alice',
+      platform: 'Swiggy',
+      tag: 'food',
+      beneficiary: 'self',
+    });
+    expect(out).toEqual({
+      types: ['expense'],
+      accountIds: [5],
+      owners: ['alice'],
+      platforms: ['Swiggy'],
+      tags: ['food'],
+      beneficiaries: ['self'],
+    });
+  });
+
+  it('treats empty string / null as empty array', () => {
+    const out = migrateFilters({ type: '', accountId: null, owner: undefined });
+    expect(out.types).toEqual([]);
+    expect(out.accountIds).toEqual([]);
+    expect(out.owners).toEqual([]);
+    expect('type' in out).toBe(false);
+  });
+
+  it('preserves existing plural keys and ignores legacy if both present', () => {
+    const out = migrateFilters({ type: 'expense', types: ['income'] });
+    expect(out.types).toEqual(['income']);
+    expect('type' in out).toBe(false);
+  });
+
+  it('passes other fields through untouched', () => {
+    const out = migrateFilters({ dateFrom: '2026-01-01', search: 'hi', categoryIds: [1, 2] });
+    expect(out).toEqual({ dateFrom: '2026-01-01', search: 'hi', categoryIds: [1, 2] });
+  });
+});
+
+describe('parseViews migration', () => {
+  it('migrates legacy filters in saved views on read', () => {
+    const legacy = JSON.stringify([
+      { id: 'v_1', name: 'Old', filters: { type: 'expense', owner: 'alice' } },
+    ]);
+    const out = parseViews(legacy);
+    expect(out[0].filters).toEqual({ types: ['expense'], owners: ['alice'] });
   });
 });
 

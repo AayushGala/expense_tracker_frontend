@@ -419,15 +419,17 @@ export default function DashboardPage() {
   const ownerValue =
     ownerFilter === 'All' ? undefined : ownerFilter;
 
-  const spendingData = useMemo(
-    () => monthlySpending(beneficiaryFilter, 6, ownerValue),
-    [beneficiaryFilter, ownerValue, monthlySpending]
-  );
+  const spendingData = useMemo(() => {
+    const ben = beneficiaryFilter ? [beneficiaryFilter] : undefined;
+    const own = ownerValue ? [ownerValue] : undefined;
+    return monthlySpending(ben, 6, own);
+  }, [beneficiaryFilter, ownerValue, monthlySpending]);
 
-  const categoryData = useMemo(
-    () => categoryBreakdown(beneficiaryFilter, undefined, ownerValue),
-    [beneficiaryFilter, ownerValue, categoryBreakdown]
-  );
+  const categoryData = useMemo(() => {
+    const ben = beneficiaryFilter ? [beneficiaryFilter] : undefined;
+    const own = ownerValue ? [ownerValue] : undefined;
+    return categoryBreakdown(ben, undefined, own);
+  }, [beneficiaryFilter, ownerValue, categoryBreakdown]);
 
   const receivables = useMemo(
     () => receivablesSummary(),

@@ -4,17 +4,54 @@
 // `transaction_views`; this module only handles parse/serialize/equality.
 // ---------------------------------------------------------------------------
 
+// Map from legacy single-value filter keys to their new array-shaped equivalents.
+// Existing saved views from before the multi-select migration are upgraded on read.
+const LEGACY_TO_PLURAL = {
+  type: 'types',
+  accountId: 'accountIds',
+  owner: 'owners',
+  platform: 'platforms',
+  tag: 'tags',
+  beneficiary: 'beneficiaries',
+};
+
+/** Convert any legacy single-value keys to their new array-shaped equivalents. */
+export function migrateFilters(filters) {
+  if (!filters || typeof filters !== 'object') return filters;
+  const out = { ...filters };
+  for (const [legacyKey, pluralKey] of Object.entries(LEGACY_TO_PLURAL)) {
+    if (legacyKey in out) {
+      const v = out[legacyKey];
+      delete out[legacyKey];
+      if (out[pluralKey] !== undefined) continue; // plural already set, prefer it
+      if (v === '' || v == null) {
+        out[pluralKey] = [];
+      } else if (Array.isArray(v)) {
+        out[pluralKey] = v;
+      } else {
+        out[pluralKey] = [v];
+      }
+    }
+  }
+  return out;
+}
+
 /** Parse a stored setting value into a list of views. Returns [] on bad input. */
 export function parseViews(raw) {
   if (raw == null) return [];
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw !== 'string') return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+  let arr;
+  if (Array.isArray(raw)) {
+    arr = raw;
+  } else if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      arr = Array.isArray(parsed) ? parsed : null;
+    } catch {
+      arr = null;
+    }
   }
+  if (!Array.isArray(arr)) return [];
+  return arr.map((v) => (v?.filters ? { ...v, filters: migrateFilters(v.filters) } : v));
 }
 
 /** Serialize a views list for the setting value. */

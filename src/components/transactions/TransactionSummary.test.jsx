@@ -11,6 +11,8 @@ describe('TransactionSummary', () => {
     count: 15,
     transfer_count: 0,
     transfer_amount: 0,
+    investment_count: 0,
+    investment_amount: 0,
   };
 
   it('shows loading message when loading without summary', () => {
@@ -63,5 +65,33 @@ describe('TransactionSummary', () => {
     const summary = { ...baseSummary, transfer_count: 1, transfer_amount: 5000 };
     render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
     expect(screen.getByText(/1 transfer excluded/i)).toBeInTheDocument();
+  });
+
+  it('shows investment exclusion when investment_count > 0', () => {
+    const summary = { ...baseSummary, investment_count: 4, investment_amount: 25000 };
+    render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
+    expect(screen.getByText(/4 investments excluded/i)).toBeInTheDocument();
+  });
+
+  it('pluralizes investment label correctly for single investment', () => {
+    const summary = { ...baseSummary, investment_count: 1, investment_amount: 8000 };
+    render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
+    expect(screen.getByText(/1 investment excluded/i)).toBeInTheDocument();
+  });
+
+  it('shows both transfer and investment exclusions together', () => {
+    const summary = {
+      ...baseSummary,
+      transfer_count: 2, transfer_amount: 10000,
+      investment_count: 3, investment_amount: 18000,
+    };
+    render(<TransactionSummary summary={summary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
+    expect(screen.getByText(/2 transfers excluded/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 investments excluded/i)).toBeInTheDocument();
+  });
+
+  it('hides exclusion section when both counts are zero', () => {
+    render(<TransactionSummary summary={baseSummary} isLoading={false} splitMode="my_share" onSplitModeChange={() => {}} />);
+    expect(screen.queryByText(/excluded/i)).not.toBeInTheDocument();
   });
 });

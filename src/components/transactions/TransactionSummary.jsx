@@ -29,6 +29,7 @@ export default function TransactionSummary({ summary, isLoading, splitMode, onSp
   if (!summary) return null;
 
   const hasTransfers = summary.transfer_count > 0;
+  const hasInvestments = summary.investment_count > 0;
 
   return (
     <div className="px-5 py-4 space-y-3">
@@ -70,11 +71,21 @@ export default function TransactionSummary({ summary, isLoading, splitMode, onSp
           </div>
         </div>
 
-        {hasTransfers && (
-          <p className="text-xs text-gray-400">
-            {summary.transfer_count} transfer{summary.transfer_count === 1 ? '' : 's'} excluded
-            {' '}({formatINR(summary.transfer_amount)})
-          </p>
+        {(hasTransfers || hasInvestments) && (
+          <div className="flex flex-col items-end gap-0.5 text-xs text-gray-400">
+            {hasTransfers && (
+              <p>
+                {summary.transfer_count} transfer{summary.transfer_count === 1 ? '' : 's'} excluded
+                {' '}({formatINR(summary.transfer_amount)})
+              </p>
+            )}
+            {hasInvestments && (
+              <p>
+                {summary.investment_count} investment{summary.investment_count === 1 ? '' : 's'} excluded
+                {' '}({formatINR(summary.investment_amount)})
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>

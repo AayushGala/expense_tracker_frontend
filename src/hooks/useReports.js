@@ -30,6 +30,12 @@ function generateMonthKeys(count) {
   return keys;
 }
 
+/** Sign for an expense-category entry: DEBIT contributes +amount, CREDIT subtracts (refund). */
+const expenseSign = (e) => (e.entry_type === 'DEBIT' ? 1 : -1);
+
+/** Sign for an income-category entry: CREDIT contributes +amount, DEBIT subtracts (reversal). */
+const incomeSign = (e) => (e.entry_type === 'CREDIT' ? 1 : -1);
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -54,22 +60,24 @@ export function useReports() {
     [transactions]
   );
 
-  // Expense-type entries only (category with type "expense")
+  // All entries on expense-type categories (both DEBITs and CREDITs).
+  // CREDITs come from refunds and offset DEBITs in net spending calcs.
   const expenseEntries = useMemo(
     () =>
       entries.filter((e) => {
         const cat = categoryMap.get(e.category_id);
-        return cat?.type === 'expense' && e.entry_type === 'DEBIT';
+        return cat?.type === 'expense';
       }),
     [entries, categoryMap]
   );
 
-  // Income-type entries only (category with type "income")
+  // All entries on income-type categories.
+  // DEBITs (income reversals — rare) offset CREDITs in net income calcs.
   const incomeEntries = useMemo(
     () =>
       entries.filter((e) => {
         const cat = categoryMap.get(e.category_id);
-        return cat?.type === 'income' && e.entry_type === 'CREDIT';
+        return cat?.type === 'income';
       }),
     [entries, categoryMap]
   );
@@ -103,7 +111,7 @@ export function useReports() {
 
       const key = toMonthKey(txn.date);
       if (Object.prototype.hasOwnProperty.call(totals, key)) {
-        totals[key] = Math.round((totals[key] + entry.amount) * 100) / 100;
+        totals[key] = Math.round((totals[key] + expenseSign(entry) * entry.amount) * 100) / 100;
       }
     }
 
@@ -135,7 +143,7 @@ export function useReports() {
       const prev = totals.get(entry.category_id) ?? 0;
       totals.set(
         entry.category_id,
-        Math.round((prev + entry.amount) * 100) / 100
+        Math.round((prev + expenseSign(entry) * entry.amount) * 100) / 100
       );
     }
 
@@ -170,7 +178,7 @@ export function useReports() {
       if (beneficiary && txn.beneficiary !== beneficiary) continue;
       const key = toMonthKey(txn.date);
       if (!data[key]) continue;
-      data[key].expenses = Math.round((data[key].expenses + entry.amount) * 100) / 100;
+      data[key].expenses = Math.round((data[key].expenses + expenseSign(entry) * entry.amount) * 100) / 100;
     }
 
     for (const entry of incomeEntries) {
@@ -180,7 +188,7 @@ export function useReports() {
       if (beneficiary && txn.beneficiary !== beneficiary) continue;
       const key = toMonthKey(txn.date);
       if (!data[key]) continue;
-      data[key].income = Math.round((data[key].income + entry.amount) * 100) / 100;
+      data[key].income = Math.round((data[key].income + incomeSign(entry) * entry.amount) * 100) / 100;
     }
 
     for (const txn of investmentTxns) {
@@ -222,7 +230,7 @@ export function useReports() {
       if (beneficiary && txn.beneficiary !== beneficiary) continue;
       const key = toMonthKey(txn.date);
       if (!Object.prototype.hasOwnProperty.call(totals, key)) continue;
-      totals[key] = Math.round((totals[key] + entry.amount) * 100) / 100;
+      totals[key] = Math.round((totals[key] + expenseSign(entry) * entry.amount) * 100) / 100;
     }
 
     return keys.map((month) => ({ month, total: totals[month] }));

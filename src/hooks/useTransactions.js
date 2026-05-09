@@ -84,15 +84,22 @@ export function useTransactions(filters = {}) {
           if (!txnTags.includes(tag)) return false;
         }
 
-        // Account / category filter — check entries
+        // Account / category filter
         const hasCategoryFilter = categoryIds && categoryIds.length > 0;
         if (accountId || hasCategoryFilter) {
           const txnEntries = entriesByTxn.get(txn.id) ?? [];
           if (accountId && !txnEntries.some((e) => e.account_id === accountId)) {
             return false;
           }
-          if (hasCategoryFilter && !txnEntries.some((e) => categoryIds.includes(e.category_id))) {
-            return false;
+          if (hasCategoryFilter) {
+            // Match if the transaction's own category_id is in the filter,
+            // OR any of its entries hit a filtered category. This catches refunds
+            // (where transaction.category is Refund but the entry CREDITs the
+            // source's expense category) and transfers with fees (where the
+            // fee_category entry hits a different category from transaction.category).
+            const txnCategoryMatch = txn.category_id != null && categoryIds.includes(txn.category_id);
+            const entryCategoryMatch = txnEntries.some((e) => categoryIds.includes(e.category_id));
+            if (!txnCategoryMatch && !entryCategoryMatch) return false;
           }
         }
 

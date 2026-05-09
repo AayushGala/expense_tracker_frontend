@@ -10,13 +10,15 @@ export function useTransactions(filters = {}) {
 
   const {
     dateFrom, dateTo,
-    types, accountIds, categoryIds, owners, platforms, tags, beneficiaries,
+    types, accountIds, categoryIds, categoryType,
+    owners, platforms, tags, beneficiaries,
     search,
   } = filters;
 
   const hasTypes = types && types.length > 0;
   const hasAccounts = accountIds && accountIds.length > 0;
   const hasCategoryFilter = categoryIds && categoryIds.length > 0;
+  const hasCategoryType = categoryType === 'expense' || categoryType === 'income';
   const hasOwners = owners && owners.length > 0;
   const hasPlatforms = platforms && platforms.length > 0;
   const hasTagsFilter = tags && tags.length > 0;
@@ -88,7 +90,7 @@ export function useTransactions(filters = {}) {
         }
 
         // Account / category filter
-        if (hasAccounts || hasCategoryFilter) {
+        if (hasAccounts || hasCategoryFilter || hasCategoryType) {
           const txnEntries = entriesByTxn.get(txn.id) ?? [];
           if (hasAccounts && !txnEntries.some((e) => accountIds.includes(e.account_id))) {
             return false;
@@ -102,6 +104,14 @@ export function useTransactions(filters = {}) {
             const txnCategoryMatch = txn.category_id != null && categoryIds.includes(txn.category_id);
             const entryCategoryMatch = txnEntries.some((e) => categoryIds.includes(e.category_id));
             if (!txnCategoryMatch && !entryCategoryMatch) return false;
+          }
+          if (hasCategoryType) {
+            // Match if any entry hits a category whose type matches.
+            const matchesActivity = txnEntries.some((e) => {
+              const cat = categoryMap.get(e.category_id);
+              return cat?.type === categoryType;
+            });
+            if (!matchesActivity) return false;
           }
         }
 
@@ -169,6 +179,7 @@ export function useTransactions(filters = {}) {
     types,
     accountIds,
     categoryIds,
+    categoryType,
     owners,
     platforms,
     tags,
@@ -177,6 +188,7 @@ export function useTransactions(filters = {}) {
     hasTypes,
     hasAccounts,
     hasCategoryFilter,
+    hasCategoryType,
     hasOwners,
     hasPlatforms,
     hasTagsFilter,

@@ -190,6 +190,7 @@ const EMPTY_FILTERS = {
   types: [],
   accountIds: [],
   categoryIds: [],
+  categoryType: '',
   owners: [],
   beneficiaries: [],
   platforms: [],

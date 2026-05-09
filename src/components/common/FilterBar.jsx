@@ -103,6 +103,19 @@ export default function FilterBar({ filters = {}, onChange, onBulkChange, onRese
         className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-[140px] sm:flex-none"
       />
 
+      {/* Activity (category type) */}
+      <Dropdown
+        value={filters.categoryType ?? ''}
+        onChange={(val) => onChange('categoryType', val)}
+        placeholder="All Activity"
+        options={[
+          { value: '', label: 'All Activity' },
+          { value: 'expense', label: 'Spending (incl. refunds)' },
+          { value: 'income', label: 'Earning (incl. reversals)' },
+        ]}
+        className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-[180px] sm:flex-none"
+      />
+
       {/* Account */}
       <MultiSelect
         value={filters.accountIds ?? []}

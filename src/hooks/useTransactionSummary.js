@@ -30,6 +30,8 @@ function buildParams(filters, splitMode) {
     params.set('category_ids', filters.categoryIds.join(','));
   }
 
+  if (filters.categoryType) params.set('category_type', filters.categoryType);
+
   if (filters.search) params.set('search', filters.search);
   if (splitMode) params.set('split_mode', splitMode);
   return params;

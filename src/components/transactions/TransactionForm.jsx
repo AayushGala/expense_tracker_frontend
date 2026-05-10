@@ -132,7 +132,12 @@ export default function TransactionForm() {
       date: new Date().toISOString().slice(0, 10),
       amount: creditEntry?.amount ?? '',
       to_account_id: creditEntry?.account_id ?? '',
-      owner: creditEntry?.account_id ? getAccountOwner(creditEntry.account_id) : '',
+      // Inherit owner / beneficiary / platform / tags from source so filters
+      // (e.g., beneficiary=spouse) match the refund alongside the original.
+      owner: sourceTxn.owner || (creditEntry?.account_id ? getAccountOwner(creditEntry.account_id) : ''),
+      beneficiary: sourceTxn.beneficiary ?? '',
+      platform: sourceTxn.platform ?? '',
+      tags: sourceTxn.tags ?? '',
       category_id: refundCategory.id,
       source_transaction_id: sourceTxn.id,
     };

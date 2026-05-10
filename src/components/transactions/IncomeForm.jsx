@@ -43,6 +43,11 @@ export default function IncomeForm({ onSubmit, initialData }) {
   const [owner, setOwner] = useState(initialData?.owner ?? '');
   const [platform, setPlatform] = useState(initialData?.platform ?? '');
   const [notes, setNotes] = useState(initialData?.notes ?? '');
+  // Read-only on this form (no input) — values are inherited (e.g., from source
+  // for refunds) and round-tripped on submit so filters by beneficiary/tags
+  // continue to match. Setters are used programmatically by handleSourceChange.
+  const [beneficiary, setBeneficiary] = useState(initialData?.beneficiary ?? '');
+  const [tags, setTags] = useState(initialData?.tags ?? '');
   const [errors, setErrors] = useState({});
 
   const isRefundMode = refundCategoryId !== null && categoryId === refundCategoryId;
@@ -76,21 +81,33 @@ export default function IncomeForm({ onSubmit, initialData }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRefundMode]);
 
-  // Auto-fill amount and account from the picked source. Driven by the picker's
-  // onChange so it runs only on user action — never on edit-form mount, which
-  // would clobber a saved partial-refund amount.
+  // Auto-fill amount, account, owner, beneficiary, platform, tags from the picked
+  // source. Mirrors the inheritance done in TransactionForm.refundInitialData
+  // (Refund button on the source's detail modal) so both refund entry points
+  // produce the same prefilled form.
   function handleSourceChange(id) {
     setSourceTransactionId(id);
     if (!id) {
       setAmount('');
       handleToAccountChange('');
+      setBeneficiary('');
+      setPlatform('');
+      setTags('');
       return;
     }
+    const sourceTxnPicked = transactions.find((t) => t.id === id);
     const creditEntry = (entriesByTxn.get(id) ?? [])
       .find((e) => e.entry_type === 'CREDIT' && e.account_id);
     if (creditEntry) {
       setAmount(String(creditEntry.amount));
       handleToAccountChange(String(creditEntry.account_id));
+    }
+    if (sourceTxnPicked) {
+      // Source's owner takes precedence over the account's default owner
+      if (sourceTxnPicked.owner) setOwner(sourceTxnPicked.owner);
+      setBeneficiary(sourceTxnPicked.beneficiary ?? '');
+      setPlatform(sourceTxnPicked.platform ?? '');
+      setTags(sourceTxnPicked.tags ?? '');
     }
   }
 
@@ -133,6 +150,8 @@ export default function IncomeForm({ onSubmit, initialData }) {
       owner,
       platform: platform.trim(),
       notes: notes.trim(),
+      beneficiary,
+      tags,
     };
 
     if (sourceTransactionId) {
@@ -247,6 +266,22 @@ export default function IncomeForm({ onSubmit, initialData }) {
               <label className={labelClass}>Refund Of (Category)</label>
               <div className="w-full rounded-xl border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm text-gray-700">
                 {sourceCategoryName}
+              </div>
+            </div>
+          )}
+          {beneficiary && (
+            <div>
+              <label className={labelClass}>Beneficiary</label>
+              <div className="w-full rounded-xl border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm text-gray-700">
+                {beneficiary}
+              </div>
+            </div>
+          )}
+          {tags && (
+            <div>
+              <label className={labelClass}>Tags</label>
+              <div className="w-full rounded-xl border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm text-gray-700">
+                {tags}
               </div>
             </div>
           )}

@@ -15,10 +15,11 @@ export default function InvestmentForm({ onSubmit, initialData }) {
   const { accounts } = useData();
   const { owners, getAccountOwner } = useOwners();
 
-  // Liquid source accounts (assets, e.g. bank accounts)
-  const liquidAccounts = accounts.filter((a) => a.type === 'asset' && a.is_active !== false);
-  // Destination accounts (all accounts that could be investment/brokerage)
-  const investmentAccounts = accounts.filter(
+  // Both ends of an investment can be assets (bank/cash/wallet) or liabilities
+  // (credit cards — common for buying gold/investments via card; brokerage held
+  // as a liability when on margin). The same-account guard in validate()
+  // prevents picking the same account on both sides.
+  const eligibleAccounts = accounts.filter(
     (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false
   );
 
@@ -45,7 +46,7 @@ export default function InvestmentForm({ onSubmit, initialData }) {
       errs.amount = 'Enter a valid positive amount.';
     }
     if (!date) errs.date = 'Date is required.';
-    if (!fromAccountId) errs.fromAccountId = 'Select the liquid source account.';
+    if (!fromAccountId) errs.fromAccountId = 'Select the source account.';
     if (!toAccountId) errs.toAccountId = 'Select the investment account.';
     if (fromAccountId && toAccountId && fromAccountId === toAccountId) {
       errs.toAccountId = 'Source and destination must be different accounts.';
@@ -107,11 +108,11 @@ export default function InvestmentForm({ onSubmit, initialData }) {
         </div>
 
         <div>
-          <label className={labelClass}>From (Liquid Account)</label>
+          <label className={labelClass}>From</label>
           <Select
             value={fromAccountId}
             onChange={(e) => handleFromAccountChange(e.target.value)}
-            options={liquidAccounts.map(accountOption)}
+            options={eligibleAccounts.map(accountOption)}
             placeholder="Select source account"
           />
           {errors.fromAccountId && (
@@ -127,7 +128,7 @@ export default function InvestmentForm({ onSubmit, initialData }) {
           <Select
             value={toAccountId}
             onChange={(e) => setToAccountId(e.target.value)}
-            options={investmentAccounts.map(accountOption)}
+            options={eligibleAccounts.map(accountOption)}
             placeholder="Select investment account"
           />
           {errors.toAccountId && (

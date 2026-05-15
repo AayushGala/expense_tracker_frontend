@@ -9,6 +9,7 @@ import TransactionsPage from './pages/TransactionsPage'
 import AccountsPage from './pages/AccountsPage'
 import ReportsPage from './pages/ReportsPage'
 import SettingsPage from './pages/SettingsPage'
+import SMSPage from './pages/SMSPage'
 import TransactionForm from './components/transactions/TransactionForm'
 import LoadingSpinner from './components/common/LoadingSpinner'
 import ErrorBoundary from './components/common/ErrorBoundary'
@@ -87,6 +88,7 @@ export default function App() {
                         <Route path="/transactions/:id/edit" element={<TransactionForm />} />
                         <Route path="/accounts" element={<AccountsPage />} />
                         <Route path="/reports" element={<ReportsPage />} />
+                        <Route path="/sms" element={<SMSPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                       </Route>
                       <Route path="*" element={<Navigate to="/" replace />} />

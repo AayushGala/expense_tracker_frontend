@@ -142,6 +142,23 @@ const api = {
   listBackups: () => request('GET', '/api/backup/'),
   createBackup: () => request('POST', '/api/backup/create/'),
 
+  // SMS
+  getSMSMessages: (params) => {
+    let qs = '';
+    if (params instanceof URLSearchParams) {
+      qs = params.toString();
+    } else if (params) {
+      qs = new URLSearchParams(params).toString();
+    }
+    return request('GET', `/api/sms/${qs ? '?' + qs : ''}`);
+  },
+  getSMSDevices: () => request('GET', '/api/sms/devices/'),
+  getSMSMessage: (id) => request('GET', `/api/sms/${id}/`),
+  confirmSMS: (id, body) => request('POST', `/api/sms/${id}/confirm/`, body),
+  reparseSMS: (id) => request('POST', `/api/sms/${id}/reparse/`),
+  ignoreSMS: (id) => request('POST', `/api/sms/${id}/ignore/`),
+  parsePendingSMS: () => request('POST', '/api/sms/parse-pending/'),
+
   // Token helpers
   getToken,
   setToken,

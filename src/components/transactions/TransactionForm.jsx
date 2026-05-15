@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useOwners } from '../../hooks/useOwners';
+import api from '../../api/client';
 import TypeSelector from './TypeSelector';
 import ExpenseForm from './ExpenseForm';
 import IncomeForm from './IncomeForm';
@@ -103,10 +104,23 @@ export default function TransactionForm() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const refundOfId = searchParams.get('refund_of');
+  const fromSmsId = searchParams.get('from_sms');
   const { transactions, entries, accounts, categories, receivables, addTransaction, updateTransaction } = useData();
   const { getAccountOwner } = useOwners();
 
   const isEditing = Boolean(id);
+
+  // SMS-from-source flow: fetch the SMS one time when ?from_sms=<id> is present.
+  // We don't keep SMS in DataContext (the list can grow large).
+  const [fromSms, setFromSms] = useState(null);
+  useEffect(() => {
+    if (!fromSmsId) return;
+    let cancelled = false;
+    api.getSMSMessage(fromSmsId)
+      .then((data) => { if (!cancelled) setFromSms(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [fromSmsId]);
 
   // Find existing transaction and reconstruct form data from entries
   const initialData = useMemo(() => {
@@ -115,6 +129,28 @@ export default function TransactionForm() {
     if (!txn) return null;
     return buildInitialData(txn, entries, accounts, receivables);
   }, [id, transactions, entries, accounts, receivables]);
+
+  // SMS-prefill flow: ?from_sms=<id> pre-populates a transaction from the
+  // SMS's parsed fields. Type derived from parsed_direction; notes get the
+  // raw SMS body so the user has full context.
+  const fromSmsInitialData = useMemo(() => {
+    if (!fromSms) return null;
+    const txnType = fromSms.parsed_direction === 'credit' ? 'income' : 'expense';
+    const base = {
+      type: txnType,
+      date: fromSms.parsed_date ?? new Date().toISOString().slice(0, 10),
+      amount: fromSms.parsed_amount ?? '',
+      category_id: fromSms.parsed_category ?? '',
+      beneficiary: fromSms.parsed_beneficiary ?? '',
+      notes: fromSms.body ?? '',
+    };
+    if (txnType === 'income') {
+      base.to_account_id = fromSms.parsed_account ?? '';
+    } else {
+      base.from_account_id = fromSms.parsed_account ?? '';
+    }
+    return base;
+  }, [fromSms]);
 
   // Refund-from-expense flow: ?refund_of=<txn_id> pre-populates a refund form
   const refundInitialData = useMemo(() => {
@@ -144,21 +180,34 @@ export default function TransactionForm() {
   }, [refundOfId, transactions, entries, categories, getAccountOwner]);
 
   const [type, setType] = useState(
-    refundInitialData?.type ?? initialData?.type ?? 'expense'
+    fromSmsInitialData?.type ?? refundInitialData?.type ?? initialData?.type ?? 'expense'
   );
   const [submitting, setSubmitting] = useState(false);
+
+  // When SMS data arrives async, switch the type to match (only once)
+  useEffect(() => {
+    if (fromSmsInitialData?.type && type !== fromSmsInitialData.type) {
+      setType(fromSmsInitialData.type);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromSmsInitialData?.type]);
 
   async function handleSubmit(transactionData) {
     if (submitting) return;
     setSubmitting(true);
 
+    // Splice sms_id into the payload so the backend links + confirms the SMS.
+    const payload = fromSmsId
+      ? { ...transactionData, sms_id: parseInt(fromSmsId, 10) }
+      : transactionData;
+
     try {
       if (isEditing) {
-        await updateTransaction(parseInt(id), transactionData);
+        await updateTransaction(parseInt(id), payload);
       } else {
-        await addTransaction(transactionData);
+        await addTransaction(payload);
       }
-      navigate('/transactions');
+      navigate(fromSmsId ? '/sms' : '/transactions');
     } catch (err) {
       console.error('TransactionForm: submit failed', err);
       setSubmitting(false);
@@ -167,8 +216,19 @@ export default function TransactionForm() {
 
   // When type changes during editing, only carry over shared fields
   const formInitialData = (() => {
-    // Refund-from-expense flow takes precedence
+    // Refund-from-expense flow takes precedence (most specific intent)
     if (refundInitialData) return refundInitialData;
+    // SMS-prefill flow second (user opened the form via "Open in form" on a SMS row)
+    if (fromSmsInitialData && type === fromSmsInitialData.type) return fromSmsInitialData;
+    if (fromSmsInitialData) {
+      // User switched type — keep shared fields
+      return {
+        amount: fromSmsInitialData.amount,
+        date: fromSmsInitialData.date,
+        notes: fromSmsInitialData.notes,
+        beneficiary: fromSmsInitialData.beneficiary,
+      };
+    }
     if (!initialData) return null;
     if (type === initialData.type) return initialData;
     // Type changed — keep only shared fields, clear type-specific ones

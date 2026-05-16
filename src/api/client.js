@@ -139,8 +139,8 @@ const api = {
   updateSetting: (key, value) => request('PUT', `/api/settings/${key}/`, { value }),
 
   // Backups
-  listBackups: () => request('GET', '/api/backup/'),
-  createBackup: () => request('POST', '/api/backup/create/'),
+  listBackups: () => request('GET', '/api/backups/'),
+  createBackup: () => request('POST', '/api/backups/'),
 
   // SMS
   getSMSMessages: (params) => {

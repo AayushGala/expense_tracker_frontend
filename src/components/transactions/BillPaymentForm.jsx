@@ -1,139 +1,97 @@
-import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useOwners } from '../../hooks/useOwners';
-import CalendarPicker from '../common/CalendarPicker';
 import Select from '../common/Select';
-import { inputClass, labelClass, errorClass, accountOption } from '../../utils/formStyles';
+import AmountInput from '../forms/AmountInput';
+import AccountPicker from '../forms/AccountPicker';
+import DateField from '../forms/DateField';
+import { inputClass, labelClass } from '../../utils/formStyles';
+import {
+  validateAmount,
+  validateDate,
+  validateRequired,
+  collectErrors,
+} from '../../utils/formValidators';
+import { D, round2 } from '../../utils/money';
 
-/**
- * Form for recording a bill payment (asset account pays off a liability).
- *
- * @param {Object}   props
- * @param {Function} props.onSubmit - Called with (transaction, entries)
- */
-export default function BillPaymentForm({ onSubmit, initialData }) {
+export default function BillPaymentForm({ values, errors, dispatch, onSubmit, isEditing }) {
   const { accounts } = useData();
-  const { owners, getAccountOwner } = useOwners();
+  const { owners } = useOwners();
 
   const bankAccounts = accounts.filter((a) => a.type === 'asset' && a.is_active !== false);
   const liabilityAccounts = accounts.filter((a) => a.type === 'liability' && a.is_active !== false);
 
-  const today = new Date().toISOString().slice(0, 10);
-
-  const [amount, setAmount] = useState(initialData?.amount ?? '');
-  const [date, setDate] = useState(initialData?.date ?? today);
-  const [fromAccountId, setFromAccountId] = useState(String(initialData?.from_account_id ?? ''));
-  const [toAccountId, setToAccountId] = useState(String(initialData?.to_account_id ?? ''));
-  const [owner, setOwner] = useState(initialData?.owner ?? '');
-  const [platform, setPlatform] = useState(initialData?.platform ?? '');
-  const [notes, setNotes] = useState(initialData?.notes ?? '');
-  const [errors, setErrors] = useState({});
-
-  function handleFromAccountChange(accountId) {
-    setFromAccountId(accountId);
-    setOwner(getAccountOwner(accountId));
+  function setField(name, value) {
+    dispatch({ type: 'SET_FIELD', name, value });
   }
 
   function validate() {
-    const errs = {};
-    const parsedAmount = parseFloat(amount);
-    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
-      errs.amount = 'Enter a valid positive amount.';
-    }
-    if (!date) errs.date = 'Date is required.';
-    if (!fromAccountId) errs.fromAccountId = 'Select the bank/asset account.';
-    if (!toAccountId) errs.toAccountId = 'Select the credit card/liability account.';
-    return errs;
+    return collectErrors({
+      amount: validateAmount(values.amount),
+      date: validateDate(values.date),
+      from_account_id: validateRequired(values.from_account_id, { message: 'Select the bank/asset account.' }),
+      to_account_id: validateRequired(values.to_account_id, { message: 'Select the credit card/liability account.' }),
+    });
   }
 
   function handleSubmit(e) {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length > 0) {
-      setErrors(errs);
+      dispatch({ type: 'SET_ERRORS', errors: errs });
       return;
     }
 
-    const parsedAmount = parseFloat(amount);
-
     onSubmit({
       type: 'bill_payment',
-      amount: parsedAmount,
-      date,
-      from_account_id: parseInt(fromAccountId),
-      to_account_id: parseInt(toAccountId),
-      owner,
-      platform: platform.trim(),
-      notes: notes.trim(),
+      amount: round2(D(values.amount)).toString(),
+      date: values.date,
+      from_account_id: parseInt(values.from_account_id),
+      to_account_id: parseInt(values.to_account_id),
+      owner: values.owner,
+      platform: (values.platform ?? '').trim(),
+      notes: (values.notes ?? '').trim(),
     });
   }
 
-
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Amount */}
-      <div>
-        <label htmlFor="txn-amount" className={labelClass}>Amount</label>
-        <div className="relative">
-          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-2xl font-bold text-gray-300">₹</span>
-          <input
-            id="txn-amount"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50/50 pl-10 pr-4 py-4 text-2xl font-bold text-gray-900 transition-colors focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 placeholder-gray-300"
-          />
-        </div>
-        {errors.amount && <p className={errorClass}>{errors.amount}</p>}
+      <AmountInput
+        value={values.amount}
+        onChange={(v) => setField('amount', v)}
+        error={errors.amount}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <DateField value={values.date} onChange={(v) => setField('date', v)} error={errors.date} />
+        <AccountPicker
+          value={values.from_account_id}
+          accounts={bankAccounts}
+          label="Paid From (Bank / Asset Account)"
+          placeholder="Select bank account"
+          error={errors.from_account_id}
+          onChange={(accountId, owner) => {
+            setField('from_account_id', accountId);
+            setField('owner', owner);
+          }}
+        />
       </div>
 
-      {/* Date + From Account (Bank) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass}>Date</label>
-          <CalendarPicker value={date} onChange={(val) => setDate(val)} className="w-full" />
-          {errors.date && <p className={errorClass}>{errors.date}</p>}
-        </div>
-
-        <div>
-          <label className={labelClass}>Paid From (Bank / Asset Account)</label>
-          <Select
-            value={fromAccountId}
-            onChange={(e) => handleFromAccountChange(e.target.value)}
-            options={bankAccounts.map(accountOption)}
-            placeholder="Select bank account"
-          />
-          {errors.fromAccountId && (
-            <p className={errorClass}>{errors.fromAccountId}</p>
-          )}
-        </div>
-      </div>
-
-      {/* To Account (Liability) + Owner */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass}>Paid To (Credit Card / Liability)</label>
-          <Select
-            value={toAccountId}
-            onChange={(e) => setToAccountId(e.target.value)}
-            options={liabilityAccounts.map(accountOption)}
-            placeholder="Select liability account"
-          />
-          {errors.toAccountId && (
-            <p className={errorClass}>{errors.toAccountId}</p>
-          )}
-        </div>
+        <AccountPicker
+          value={values.to_account_id}
+          accounts={liabilityAccounts}
+          label="Paid To (Credit Card / Liability)"
+          placeholder="Select liability account"
+          error={errors.to_account_id}
+          onChange={(accountId) => setField('to_account_id', accountId)}
+        />
 
         {owners.length > 0 && (
           <div>
             <label className={labelClass}>Owner</label>
             <Select
-              value={owner}
-              onChange={(e) => setOwner(e.target.value)}
+              value={values.owner}
+              onChange={(e) => setField('owner', e.target.value)}
               options={owners.map((o) => ({ value: o, label: o }))}
               placeholder="Unassigned"
             />
@@ -141,28 +99,26 @@ export default function BillPaymentForm({ onSubmit, initialData }) {
         )}
       </div>
 
-      {/* Platform */}
       <div>
         <label htmlFor="txn-platform" className={labelClass}>Platform</label>
         <input
           id="txn-platform"
           type="text"
           placeholder="e.g. Swiggy, Amazon, Flipkart"
-          value={platform}
-          onChange={(e) => setPlatform(e.target.value)}
+          value={values.platform}
+          onChange={(e) => setField('platform', e.target.value)}
           className={inputClass}
         />
       </div>
 
-      {/* Notes */}
       <div>
         <label htmlFor="txn-notes" className={labelClass}>Notes</label>
         <textarea
           id="txn-notes"
           rows={3}
           placeholder="Optional notes"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          value={values.notes}
+          onChange={(e) => setField('notes', e.target.value)}
           className={`${inputClass} resize-none`}
         />
       </div>
@@ -177,7 +133,7 @@ export default function BillPaymentForm({ onSubmit, initialData }) {
                    text-white shadow-sm hover:bg-brand-hover focus:outline-none
                    focus:ring-2 focus:ring-accent/30 transition-colors"
       >
-        {initialData ? 'Update Bill Payment' : 'Save Bill Payment'}
+        {isEditing ? 'Update Bill Payment' : 'Save Bill Payment'}
       </button>
     </form>
   );

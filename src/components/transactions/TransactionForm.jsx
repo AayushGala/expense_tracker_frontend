@@ -1,6 +1,7 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
+import { useToast } from '../../context/ToastContext';
 import { useOwners } from '../../hooks/useOwners';
 import api from '../../api/client';
 import TypeSelector from './TypeSelector';
@@ -12,23 +13,24 @@ import InvestmentForm from './InvestmentForm';
 import SplitExpenseForm from './SplitExpenseForm';
 import ReimbursementForm from './ReimbursementForm';
 import Card from '../common/Card';
+import {
+  transactionFormReducer,
+  makeInitialState,
+} from './transactionFormReducer';
+import { makePersonId } from './PeopleList';
 
-/**
- * Reconstruct form-friendly fields from a transaction + its entries.
- * The Transaction model only stores type/date/notes/etc.
- * The amounts and account references live in the Entry objects.
- */
+const PREDEFINED_BENEFICIARIES = ['self', 'family'];
+
+// Transaction rows hold type/date/notes only; amounts and account refs live
+// in the Entry rows. This rebuilds the form-shaped object for edit mode.
 function buildInitialData(transaction, entries, accounts, receivables) {
   if (!transaction) return null;
 
-  const txnEntries = entries.filter(
-    (e) => e.transaction_id === transaction.id
-  );
+  const txnEntries = entries.filter((e) => e.transaction_id === transaction.id);
   const txnReceivables = (receivables ?? []).filter(
-    (r) => r.transaction === transaction.id || r.transaction_id === transaction.id
+    (r) => r.transaction === transaction.id || r.transaction_id === transaction.id,
   );
 
-  // Separate entries into account entries and category entries
   const accountEntries = txnEntries.filter((e) => e.account_id != null);
   const categoryEntries = txnEntries.filter((e) => e.category_id != null);
 
@@ -37,45 +39,33 @@ function buildInitialData(transaction, entries, accounts, receivables) {
   const debitCategoryEntry = categoryEntries.find((e) => e.entry_type === 'DEBIT');
   const creditCategoryEntry = categoryEntries.find((e) => e.entry_type === 'CREDIT');
 
-  // Amount from any entry (they should all have the same absolute amount)
   const amount = txnEntries[0]?.amount ?? '';
 
-  const base = {
-    ...transaction,
-    amount,
-  };
+  const base = { ...transaction, amount };
 
   switch (transaction.type) {
     case 'expense':
-      // CREDIT account = from_account, DEBIT category = category
       return {
         ...base,
         from_account_id: creditAccountEntry?.account_id ?? '',
         category_id: transaction.category_id ?? debitCategoryEntry?.category_id ?? '',
       };
-
     case 'income':
-      // DEBIT account = to_account, CREDIT category = entry category (may be source's category for refunds)
       return {
         ...base,
         to_account_id: debitAccountEntry?.account_id ?? '',
         category_id: transaction.category_id ?? creditCategoryEntry?.category_id ?? '',
         source_transaction_id: transaction.source_transaction ?? null,
       };
-
     case 'transfer':
     case 'bill_payment':
     case 'investment':
-      // DEBIT account = to_account, CREDIT account = from_account
       return {
         ...base,
         from_account_id: creditAccountEntry?.account_id ?? '',
         to_account_id: debitAccountEntry?.account_id ?? '',
       };
-
     case 'split_expense': {
-      // CREDIT account entry = total_amount paid from bank
-      // DEBIT category entry = my_share
       const totalAmount = creditAccountEntry?.amount ?? '';
       const myShare = debitCategoryEntry?.amount ?? '';
       return {
@@ -87,16 +77,97 @@ function buildInitialData(transaction, entries, accounts, receivables) {
         receivables: txnReceivables,
       };
     }
-
     case 'reimbursement':
       return {
         ...base,
         to_account_id: debitAccountEntry?.account_id ?? '',
       };
-
     default:
       return base;
   }
+}
+
+// Flattens a typed initialData object (per-type field names) into the
+// reducer's unified values bag, which is shared across types so state
+// survives type-switches.
+function valuesFromInitialData(initialData, ctx = {}) {
+  if (!initialData) return null;
+  const v = {};
+
+  if (initialData.amount !== undefined && initialData.amount !== '') {
+    v.amount = String(initialData.amount);
+  }
+  if (initialData.date) v.date = initialData.date;
+  if (initialData.notes != null) v.notes = initialData.notes;
+  if (initialData.platform != null) v.platform = initialData.platform;
+  if (initialData.tags != null) v.tags = initialData.tags;
+  if (initialData.owner != null) v.owner = initialData.owner;
+
+  // ExpenseForm splits beneficiary into a type + custom-text pair; IncomeForm
+  // reads the raw string. Maintain both so either form can edit.
+  if (initialData.beneficiary != null) {
+    v.beneficiary = initialData.beneficiary;
+    if (PREDEFINED_BENEFICIARIES.includes(initialData.beneficiary)) {
+      v.beneficiary_type = initialData.beneficiary;
+      v.custom_beneficiary = '';
+    } else if (initialData.beneficiary) {
+      v.beneficiary_type = 'custom';
+      v.custom_beneficiary = initialData.beneficiary;
+    }
+  }
+
+  if (initialData.from_account_id != null && initialData.from_account_id !== '') {
+    v.from_account_id = String(initialData.from_account_id);
+  }
+  if (initialData.to_account_id != null && initialData.to_account_id !== '') {
+    v.to_account_id = String(initialData.to_account_id);
+  }
+  if (initialData.category_id != null && initialData.category_id !== '') {
+    v.category_id = String(initialData.category_id);
+  }
+
+  if (initialData.source_transaction_id !== undefined) {
+    v.source_transaction_id = initialData.source_transaction_id;
+  }
+
+  if (initialData.fee !== undefined && initialData.fee !== '') {
+    v.fee = String(initialData.fee);
+  }
+  if (initialData.fee_category_id !== undefined && initialData.fee_category_id !== '') {
+    v.fee_category_id = String(initialData.fee_category_id);
+  }
+
+  if (initialData.total_amount != null && initialData.total_amount !== '') {
+    v.amount = String(initialData.total_amount);
+  }
+  if (initialData.my_share != null && initialData.my_share !== '') {
+    v.custom_my_share = String(initialData.my_share);
+    v.my_share_type = 'custom';
+  }
+  if (Array.isArray(initialData.receivables) && initialData.receivables.length > 0) {
+    v.other_people = initialData.receivables.map((r) => ({
+      id: makePersonId(),
+      name: r.person_name ?? '',
+      amount: String(r.amount_owed ?? ''),
+    }));
+    v.total_people = String(initialData.receivables.length + 1);
+  }
+
+  // Heuristic — match by amount_settled within rounding tolerance, since the
+  // settled-receivable id isn't stored on the transaction directly.
+  if (
+    initialData.type === 'reimbursement' &&
+    ctx.receivables &&
+    initialData.amount != null
+  ) {
+    const settled = parseFloat(initialData.amount);
+    const match = (ctx.receivables ?? []).find(
+      (r) => r.amount_settled > 0 && Math.abs(r.amount_settled - settled) < 0.01,
+    );
+    if (match) v.selected_receivable_id = String(match.id);
+  }
+
+  return v;
 }
 
 export default function TransactionForm() {
@@ -105,13 +176,16 @@ export default function TransactionForm() {
   const [searchParams] = useSearchParams();
   const refundOfId = searchParams.get('refund_of');
   const fromSmsId = searchParams.get('from_sms');
-  const { transactions, entries, accounts, categories, receivables, addTransaction, updateTransaction } = useData();
+  const {
+    transactions, entries, accounts, categories, receivables,
+    addTransaction, updateTransaction,
+  } = useData();
   const { getAccountOwner } = useOwners();
+  const toast = useToast();
 
   const isEditing = Boolean(id);
 
-  // SMS-from-source flow: fetch the SMS one time when ?from_sms=<id> is present.
-  // We don't keep SMS in DataContext (the list can grow large).
+  // SMS isn't in DataContext (list can grow large); fetched on demand here.
   const [fromSms, setFromSms] = useState(null);
   useEffect(() => {
     if (!fromSmsId) return;
@@ -122,17 +196,39 @@ export default function TransactionForm() {
     return () => { cancelled = true; };
   }, [fromSmsId]);
 
-  // Find existing transaction and reconstruct form data from entries
-  const initialData = useMemo(() => {
+  const editInitialData = useMemo(() => {
     if (!id) return null;
     const txn = transactions.find((t) => String(t.id) === String(id));
     if (!txn) return null;
     return buildInitialData(txn, entries, accounts, receivables);
   }, [id, transactions, entries, accounts, receivables]);
 
-  // SMS-prefill flow: ?from_sms=<id> pre-populates a transaction from the
-  // SMS's parsed fields. Type derived from parsed_direction; notes get the
-  // raw SMS body so the user has full context.
+  const refundInitialData = useMemo(() => {
+    if (!refundOfId) return null;
+    const sourceTxn = transactions.find((t) => String(t.id) === String(refundOfId));
+    if (!sourceTxn) return null;
+    const refundCategory = categories.find((c) => c.role === 'refund');
+    if (!refundCategory) return null;
+
+    const sourceEntries = entries.filter((e) => e.transaction_id === sourceTxn.id);
+    const creditEntry = sourceEntries.find((e) => e.entry_type === 'CREDIT' && e.account_id);
+
+    return {
+      type: 'income',
+      date: new Date().toISOString().slice(0, 10),
+      amount: creditEntry?.amount ?? '',
+      to_account_id: creditEntry?.account_id ?? '',
+      owner: sourceTxn.owner || (creditEntry?.account_id ? getAccountOwner(creditEntry.account_id) : ''),
+      beneficiary: sourceTxn.beneficiary ?? '',
+      platform: sourceTxn.platform ?? '',
+      tags: sourceTxn.tags ?? '',
+      category_id: refundCategory.id,
+      source_transaction_id: sourceTxn.id,
+    };
+  }, [refundOfId, transactions, entries, categories, getAccountOwner]);
+
+  // null until the SMS fetch resolves; the effect below dispatches
+  // LOAD_INITIAL once it does.
   const fromSmsInitialData = useMemo(() => {
     if (!fromSms) return null;
     const txnType = fromSms.parsed_direction === 'credit' ? 'income' : 'expense';
@@ -152,51 +248,39 @@ export default function TransactionForm() {
     return base;
   }, [fromSms]);
 
-  // Refund-from-expense flow: ?refund_of=<txn_id> pre-populates a refund form
-  const refundInitialData = useMemo(() => {
-    if (!refundOfId) return null;
-    const sourceTxn = transactions.find((t) => String(t.id) === String(refundOfId));
-    if (!sourceTxn) return null;
-    const refundCategory = categories.find((c) => c.role === 'refund');
-    if (!refundCategory) return null;
-
-    const sourceEntries = entries.filter((e) => e.transaction_id === sourceTxn.id);
-    const creditEntry = sourceEntries.find((e) => e.entry_type === 'CREDIT' && e.account_id);
-
-    return {
-      type: 'income',
-      date: new Date().toISOString().slice(0, 10),
-      amount: creditEntry?.amount ?? '',
-      to_account_id: creditEntry?.account_id ?? '',
-      // Inherit owner / beneficiary / platform / tags from source so filters
-      // (e.g., beneficiary=spouse) match the refund alongside the original.
-      owner: sourceTxn.owner || (creditEntry?.account_id ? getAccountOwner(creditEntry.account_id) : ''),
-      beneficiary: sourceTxn.beneficiary ?? '',
-      platform: sourceTxn.platform ?? '',
-      tags: sourceTxn.tags ?? '',
-      category_id: refundCategory.id,
-      source_transaction_id: sourceTxn.id,
-    };
-  }, [refundOfId, transactions, entries, categories, getAccountOwner]);
-
-  const [type, setType] = useState(
-    fromSmsInitialData?.type ?? refundInitialData?.type ?? initialData?.type ?? 'expense'
-  );
-  const [submitting, setSubmitting] = useState(false);
-
-  // When SMS data arrives async, switch the type to match (only once)
-  useEffect(() => {
-    if (fromSmsInitialData?.type && type !== fromSmsInitialData.type) {
-      setType(fromSmsInitialData.type);
+  // Edit and refund flows seed the initial state synchronously; SMS prefill
+  // arrives later via the effect below (async fetch).
+  const [state, dispatch] = useReducer(transactionFormReducer, null, () => {
+    const initial = editInitialData ?? refundInitialData ?? null;
+    if (initial) {
+      return makeInitialState({
+        type: initial.type,
+        initialValues: valuesFromInitialData(initial, { receivables }) ?? undefined,
+      });
     }
+    return makeInitialState();
+  });
+
+  // Don't overwrite edit/refund prefill with SMS data (those URL params
+  // combined with ?from_sms would be contradictory).
+  useEffect(() => {
+    if (!fromSmsInitialData) return;
+    if (isEditing || refundInitialData) return;
+    dispatch({
+      type: 'LOAD_INITIAL',
+      payload: {
+        type: fromSmsInitialData.type,
+        values: valuesFromInitialData(fromSmsInitialData) ?? {},
+      },
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromSmsInitialData?.type]);
+  }, [fromSmsInitialData]);
 
   async function handleSubmit(transactionData) {
-    if (submitting) return;
-    setSubmitting(true);
+    if (state.submitting) return;
+    dispatch({ type: 'SUBMITTING', value: true });
 
-    // Splice sms_id into the payload so the backend links + confirms the SMS.
+    // Backend links and confirms the SMS when sms_id is present.
     const payload = fromSmsId
       ? { ...transactionData, sms_id: parseInt(fromSmsId, 10) }
       : transactionData;
@@ -204,59 +288,36 @@ export default function TransactionForm() {
     try {
       if (isEditing) {
         await updateTransaction(parseInt(id), payload);
+        toast.success('Transaction updated');
       } else {
         await addTransaction(payload);
+        toast.success(fromSmsId ? 'Transaction created and SMS confirmed' : 'Transaction saved');
       }
       navigate(fromSmsId ? '/sms' : '/transactions');
     } catch (err) {
       console.error('TransactionForm: submit failed', err);
-      setSubmitting(false);
+      toast.error(err.message || 'Failed to save transaction.');
+      dispatch({ type: 'SUBMITTING', value: false });
     }
   }
 
-  // When type changes during editing, only carry over shared fields
-  const formInitialData = (() => {
-    // Refund-from-expense flow takes precedence (most specific intent)
-    if (refundInitialData) return refundInitialData;
-    // SMS-prefill flow second (user opened the form via "Open in form" on a SMS row)
-    if (fromSmsInitialData && type === fromSmsInitialData.type) return fromSmsInitialData;
-    if (fromSmsInitialData) {
-      // User switched type — keep shared fields
-      return {
-        amount: fromSmsInitialData.amount,
-        date: fromSmsInitialData.date,
-        notes: fromSmsInitialData.notes,
-        beneficiary: fromSmsInitialData.beneficiary,
-      };
-    }
-    if (!initialData) return null;
-    if (type === initialData.type) return initialData;
-    // Type changed — keep only shared fields, clear type-specific ones
-    return {
-      amount: initialData.amount,
-      date: initialData.date,
-      notes: initialData.notes,
-      platform: initialData.platform,
-      owner: initialData.owner,
-      tags: initialData.tags,
-      beneficiary: initialData.beneficiary,
-    };
-  })();
-
-  const formProps = {
+  const subFormProps = {
+    values: state.values,
+    errors: state.errors,
+    dispatch,
     onSubmit: handleSubmit,
-    initialData: formInitialData,
+    isEditing,
   };
 
   function renderSubForm() {
-    switch (type) {
-      case 'expense':       return <ExpenseForm {...formProps} />;
-      case 'income':        return <IncomeForm {...formProps} />;
-      case 'transfer':      return <TransferForm {...formProps} />;
-      case 'bill_payment':  return <BillPaymentForm {...formProps} />;
-      case 'investment':    return <InvestmentForm {...formProps} />;
-      case 'split_expense': return <SplitExpenseForm {...formProps} />;
-      case 'reimbursement': return <ReimbursementForm {...formProps} />;
+    switch (state.type) {
+      case 'expense':       return <ExpenseForm {...subFormProps} />;
+      case 'income':        return <IncomeForm {...subFormProps} />;
+      case 'transfer':      return <TransferForm {...subFormProps} />;
+      case 'bill_payment':  return <BillPaymentForm {...subFormProps} />;
+      case 'investment':    return <InvestmentForm {...subFormProps} />;
+      case 'split_expense': return <SplitExpenseForm {...subFormProps} />;
+      case 'reimbursement': return <ReimbursementForm {...subFormProps} />;
       default:              return null;
     }
   }
@@ -296,12 +357,15 @@ export default function TransactionForm() {
       {/* Transaction type card */}
       <Card className="p-5 mb-6">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-3">Transaction Type</p>
-        <TypeSelector value={type} onChange={setType} />
+        <TypeSelector
+          value={state.type}
+          onChange={(t) => dispatch({ type: 'SET_TYPE', value: t })}
+        />
       </Card>
 
       {/* Form card */}
       <Card className="p-6">
-        {submitting ? (
+        {state.submitting ? (
           <div className="flex items-center justify-center py-16">
             <div className="h-8 w-8 rounded-full border-[3px] border-brand border-t-transparent animate-spin" />
           </div>

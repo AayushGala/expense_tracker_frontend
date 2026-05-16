@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { useUrlFilters } from '../hooks/useUrlFilters';
+import { sum, ZERO } from '../utils/money';
 import {
   BarChart,
   Bar,
@@ -23,6 +25,12 @@ import EmptyState from '../components/common/EmptyState';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { formatDate, formatINR, transactionTypeLabel } from '../utils/formatters';
 import TypeIcon, { getVariant } from '../components/common/TypeIcon';
+
+const DASHBOARD_FILTER_SCHEMA = {
+  beneficiary: {},
+  owner:       {},
+};
+const DASHBOARD_DEFAULTS = { beneficiary: 'All', owner: 'All' };
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -91,12 +99,15 @@ function OwnerToggle({ value, onChange, options }) {
 // ---------------------------------------------------------------------------
 
 function NetWorthCard({ accountsByType, balances, netWorth }) {
-  const sum = (accounts) =>
-    accounts.reduce((acc, a) => acc + (balances.get(a.id) ?? 0), 0);
+  // Balances are Decimals — using `+` on Decimal goes through valueOf() which
+  // is a string, so we'd silently get string-concatenation. Sum via the
+  // Decimal-aware helper instead.
+  const totalOf = (accounts) =>
+    sum(accounts.map((a) => balances.get(a.id) ?? ZERO));
 
-  const totalAssets     = sum(accountsByType.asset ?? []);
-  const totalReceivable = sum(accountsByType.receivable ?? []);
-  const totalLiability  = sum(accountsByType.liability ?? []);
+  const totalAssets     = totalOf(accountsByType.asset ?? []);
+  const totalReceivable = totalOf(accountsByType.receivable ?? []);
+  const totalLiability  = totalOf(accountsByType.liability ?? []);
 
   return (
     <Card className="p-6 flex flex-col gap-4">
@@ -411,8 +422,12 @@ export default function DashboardPage() {
   const { owners } = useOwners();
   const { monthlySpending, categoryBreakdown, receivablesSummary } = useReports();
 
-  const [beneficiary, setBeneficiary] = useState('All');
-  const [ownerFilter, setOwnerFilter] = useState('All');
+  // URL-backed so dashboard filters survive reload/share.
+  const [dashFilters, setDashFilters] = useUrlFilters(DASHBOARD_FILTER_SCHEMA, DASHBOARD_DEFAULTS);
+  const beneficiary = dashFilters.beneficiary;
+  const ownerFilter = dashFilters.owner;
+  const setBeneficiary = (v) => setDashFilters({ beneficiary: v });
+  const setOwnerFilter = (v) => setDashFilters({ owner: v });
 
   const beneficiaryFilter =
     beneficiary === 'All' ? undefined : beneficiary.toLowerCase();
@@ -450,12 +465,12 @@ export default function DashboardPage() {
 
   const filteredNetWorth = useMemo(() => {
     if (!ownerValue) return netWorth;
-    const sum = (accounts) =>
-      accounts.reduce((acc, a) => acc + (getAccountBalance(a.id) ?? 0), 0);
-    const assets = sum(filteredAccountsByType.asset ?? []);
-    const receivable = sum(filteredAccountsByType.receivable ?? []);
-    const liability = sum(filteredAccountsByType.liability ?? []);
-    return assets + receivable - liability;
+    const totalOf = (accounts) =>
+      sum(accounts.map((a) => getAccountBalance(a.id) ?? ZERO));
+    const assets = totalOf(filteredAccountsByType.asset ?? []);
+    const receivable = totalOf(filteredAccountsByType.receivable ?? []);
+    const liability = totalOf(filteredAccountsByType.liability ?? []);
+    return assets.plus(receivable).minus(liability);
   }, [ownerValue, filteredAccountsByType, getAccountBalance, netWorth]);
 
   const filteredBalances = useMemo(() => {

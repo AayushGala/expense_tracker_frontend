@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { useUrlFilters } from '../hooks/useUrlFilters';
 import { useNavigate } from 'react-router-dom';
 import { useTransactions } from '../hooks/useTransactions';
 import { useTransactionSummary } from '../hooks/useTransactionSummary';
@@ -255,11 +256,28 @@ function getDefaultFilters() {
   return { ...EMPTY_FILTERS, dateFrom, dateTo };
 }
 
+// Schema for useUrlFilters. `keepEmpty: true` on the dates so a deliberate
+// "clear" survives reloads instead of snapping back to this-month default.
+const FILTER_SCHEMA = {
+  dateFrom:      { keepEmpty: true },
+  dateTo:        { keepEmpty: true },
+  types:         { array: true },
+  accountIds:    { array: true },
+  categoryIds:   { array: true },
+  categoryType:  {},
+  owners:        { array: true },
+  beneficiaries: { array: true },
+  platforms:     { array: true },
+  tags:          { array: true },
+  search:        {},
+};
+
 export default function TransactionsPage() {
   const navigate = useNavigate();
   const { isLoading, deleteTransaction } = useData();
 
-  const [filters, setFilters] = useState(getDefaultFilters);
+  // URL-backed so reload/share/bookmark preserves the filter view.
+  const [filters, setFilters] = useUrlFilters(FILTER_SCHEMA, getDefaultFilters());
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [splitMode, setSplitMode] = useState('my_share');

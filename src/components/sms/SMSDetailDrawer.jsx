@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
+import { useToast } from '../../context/ToastContext';
 import api from '../../api/client';
 import CalendarPicker from '../common/CalendarPicker';
 import Select from '../common/Select';
@@ -10,16 +11,78 @@ import {
 } from '../../utils/formStyles';
 import { formatDate, formatINR } from '../../utils/formatters';
 import { effectiveSmsStatus } from '../../utils/sms';
+import { D, round2 } from '../../utils/money';
+
+function initialStateFromSms(sms) {
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    values: {
+      type: sms?.parsed_direction === 'credit' ? 'income' : 'expense',
+      amount: sms?.parsed_amount ?? '',
+      date: sms?.parsed_date ?? today,
+      account_id: String(sms?.parsed_account ?? ''),
+      category_id: String(sms?.parsed_category ?? ''),
+      beneficiary: sms?.parsed_beneficiary ?? '',
+      notes: '',
+    },
+    errors: {},
+    submitting: false,
+    actionBusy: false,
+  };
+}
+
+function drawerReducer(state, action) {
+  switch (action.type) {
+    case 'RESET_FROM_SMS':
+      return initialStateFromSms(action.sms);
+
+    case 'SET_FIELD': {
+      const { name, value } = action;
+      const nextErrors = { ...state.errors };
+      if (name in nextErrors) delete nextErrors[name];
+      return {
+        ...state,
+        values: { ...state.values, [name]: value },
+        errors: nextErrors,
+      };
+    }
+
+    case 'SET_TYPE': {
+      // Expense and income use different category sets, so the old id is
+      // rarely valid for the new type.
+      const nextErrors = { ...state.errors };
+      delete nextErrors.category_id;
+      return {
+        ...state,
+        values: { ...state.values, type: action.value, category_id: '' },
+        errors: nextErrors,
+      };
+    }
+
+    case 'SET_ERRORS':
+      return { ...state, errors: action.errors ?? {} };
+
+    case 'SUBMITTING':
+      return { ...state, submitting: Boolean(action.value) };
+
+    case 'ACTION_BUSY':
+      return { ...state, actionBusy: Boolean(action.value) };
+
+    default:
+      return state;
+  }
+}
 
 /**
- * Detail + confirm modal for an SMS. Always shows the original body, the
- * masked version that was sent to the LLM (so the user can audit masking),
- * and the parsed fields. If the SMS is in `parsed` status, the editable
- * confirm form appears below for one-click confirmation.
+ * Detail + confirm modal for an SMS. Shows the original body, the masked
+ * version sent to the LLM (for audit), and the parsed fields. When the SMS
+ * is parsed and not yet linked, an editable confirm form lets the user
+ * commit it as a transaction.
  */
 export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedTransaction }) {
-  const { accounts, categories, loadData } = useData();
+  const { accounts, categories, confirmSMS } = useData();
   const navigate = useNavigate();
+  const toast = useToast();
 
   const usableAccounts = accounts.filter(
     (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false,
@@ -27,96 +90,85 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
 
   const accountMap = useMemo(
     () => new Map(accounts.map((a) => [a.id, a])),
-    [accounts]
+    [accounts],
   );
   const categoryMap = useMemo(
     () => new Map(categories.map((c) => [c.id, c])),
-    [categories]
+    [categories],
   );
 
-  const today = new Date().toISOString().slice(0, 10);
-  const initialType = sms?.parsed_direction === 'credit' ? 'income' : 'expense';
-  // Drive UI from the FK (source of truth), not from `status` which can drift
-  // when a linked transaction is deleted.
   const isLinked = !!sms?.transaction;
   const canConfirm = !isLinked && sms?.parsed_amount != null;
 
-  const [type, setType] = useState(initialType);
-  const [amount, setAmount] = useState(sms?.parsed_amount ?? '');
-  const [date, setDate] = useState(sms?.parsed_date ?? today);
-  const [accountId, setAccountId] = useState(String(sms?.parsed_account ?? ''));
-  const [categoryId, setCategoryId] = useState(String(sms?.parsed_category ?? ''));
-  const [beneficiary, setBeneficiary] = useState(sms?.parsed_beneficiary ?? '');
-  const [notes, setNotes] = useState('');
-  const [errors, setErrors] = useState({});
-  const [submitting, setSubmitting] = useState(false);
-  const [actionBusy, setActionBusy] = useState(false);
+  const [state, dispatch] = useReducer(drawerReducer, sms, initialStateFromSms);
+  const { values, errors, submitting, actionBusy } = state;
 
-  // Reset state when the sms prop changes
+  // Re-sync when the user opens a different SMS without closing the modal.
   useEffect(() => {
     if (!sms) return;
-    const t = sms.parsed_direction === 'credit' ? 'income' : 'expense';
-    setType(t);
-    setAmount(sms.parsed_amount ?? '');
-    setDate(sms.parsed_date ?? today);
-    setAccountId(String(sms.parsed_account ?? ''));
-    setCategoryId(String(sms.parsed_category ?? ''));
-    setBeneficiary(sms.parsed_beneficiary ?? '');
-    setNotes('');
-    setErrors({});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sms?.id]);
+    dispatch({ type: 'RESET_FROM_SMS', sms });
+  }, [sms?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filteredCategories = useMemo(() => {
-    return categories.filter((c) => c.type === type);
-  }, [categories, type]);
+  const filteredCategories = useMemo(
+    () => categories.filter((c) => c.type === values.type),
+    [categories, values.type],
+  );
+
+  function setField(name, value) {
+    dispatch({ type: 'SET_FIELD', name, value });
+  }
 
   function validate() {
     const errs = {};
-    const parsed = parseFloat(amount);
-    if (!amount || Number.isNaN(parsed) || parsed <= 0) errs.amount = 'Enter a positive amount.';
-    if (!date) errs.date = 'Date is required.';
-    if (!accountId) errs.accountId = 'Select an account.';
-    if (!categoryId) errs.categoryId = 'Select a category.';
+    const parsed = D(values.amount);
+    if (!values.amount || parsed.lte(0)) errs.amount = 'Enter a positive amount.';
+    if (!values.date) errs.date = 'Date is required.';
+    if (!values.account_id) errs.account_id = 'Select an account.';
+    if (!values.category_id) errs.category_id = 'Select a category.';
     return errs;
   }
 
   async function handleConfirm() {
     const errs = validate();
     if (Object.keys(errs).length > 0) {
-      setErrors(errs);
+      dispatch({ type: 'SET_ERRORS', errors: errs });
       return;
     }
-    setSubmitting(true);
-    setErrors({});
+    dispatch({ type: 'SUBMITTING', value: true });
+    dispatch({ type: 'SET_ERRORS', errors: {} });
     try {
-      await api.confirmSMS(sms.id, {
-        type,
-        amount: parseFloat(amount),
-        date,
-        from_account_id: parseInt(accountId, 10),
-        category_id: parseInt(categoryId, 10),
-        beneficiary,
-        notes,
+      await confirmSMS(sms.id, {
+        type: values.type,
+        amount: round2(D(values.amount)).toString(),
+        date: values.date,
+        from_account_id: parseInt(values.account_id, 10),
+        category_id: parseInt(values.category_id, 10),
+        beneficiary: values.beneficiary,
+        notes: values.notes,
       });
-      if (loadData) await loadData();
+      toast.success('SMS confirmed as transaction');
       onSuccess?.();
     } catch (err) {
-      setErrors({ submit: err.message || 'Failed to confirm SMS.' });
+      const msg = err.message || 'Failed to confirm SMS.';
+      dispatch({ type: 'SET_ERRORS', errors: { submit: msg } });
+      toast.error(msg);
     } finally {
-      setSubmitting(false);
+      dispatch({ type: 'SUBMITTING', value: false });
     }
   }
 
   async function handleReparse() {
-    setActionBusy(true);
+    dispatch({ type: 'ACTION_BUSY', value: true });
     try {
       await api.reparseSMS(sms.id);
+      toast.success('SMS reparsed');
       onSuccess?.();
     } catch (err) {
-      setErrors({ submit: err.message || 'Reparse failed.' });
+      const msg = err.message || 'Reparse failed.';
+      dispatch({ type: 'SET_ERRORS', errors: { submit: msg } });
+      toast.error(msg);
     } finally {
-      setActionBusy(false);
+      dispatch({ type: 'ACTION_BUSY', value: false });
     }
   }
 
@@ -127,17 +179,15 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
   }
 
   function handleUseFullForm() {
-    // Escape hatch for transaction types that the inline confirm form can't
-    // express (transfer / bill_payment / investment / refund / split). The
-    // TransactionForm reads `?from_sms` to pre-fill from parsed fields, and
-    // the backend links the SMS on save via the `sms_id` field.
+    // For types the inline confirm form can't express (transfer, bill_payment,
+    // investment, refund, split) — TransactionForm reads `?from_sms` and the
+    // backend links the SMS on save via `sms_id`.
     onClose?.();
     navigate(`/transactions/new?from_sms=${sms.id}`);
   }
 
   if (!sms) return null;
 
-  // Resolve parsed FK references to display names
   const parsedAccountName = sms.parsed_account ? accountMap.get(sms.parsed_account)?.name : null;
   const parsedCategoryName = sms.parsed_category ? categoryMap.get(sms.parsed_category)?.name : null;
 
@@ -212,115 +262,111 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
         </div>
       )}
 
-      {/* Confirm form — shown whenever the SMS isn't linked to a transaction
-          and has parsed values we can pre-fill. */}
       {canConfirm && (
-        <>
-          <div className="border-t border-gray-100 pt-4">
-            <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold mb-3">
-              Confirm as transaction
-            </p>
+        <div className="border-t border-gray-100 pt-4">
+          <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold mb-3">
+            Confirm as transaction
+          </p>
 
-            {/* Type radio */}
-            <div className="flex items-center gap-2 mb-4">
-              <button
-                type="button"
-                onClick={() => { setType('expense'); setCategoryId(''); }}
-                className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-colors ${
-                  type === 'expense'
-                    ? 'bg-brand text-white border-brand'
-                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                Expense
-              </button>
-              <button
-                type="button"
-                onClick={() => { setType('income'); setCategoryId(''); }}
-                className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-colors ${
-                  type === 'income'
-                    ? 'bg-accent-light text-brand border-accent'
-                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                Income
-              </button>
-            </div>
+          {/* Type radio */}
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'SET_TYPE', value: 'expense' })}
+              className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-colors ${
+                values.type === 'expense'
+                  ? 'bg-brand text-white border-brand'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              Expense
+            </button>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'SET_TYPE', value: 'income' })}
+              className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-colors ${
+                values.type === 'income'
+                  ? 'bg-accent-light text-brand border-accent'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              Income
+            </button>
+          </div>
 
-            {/* Amount + Date */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className={labelClass}>Amount</label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-lg font-bold text-gray-300">₹</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50/50 pl-8 pr-3 py-2.5 text-sm font-semibold text-gray-900 focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/20"
-                  />
-                </div>
-                {errors.amount && <p className={errorClass}>{errors.amount}</p>}
-              </div>
-
-              <div>
-                <label className={labelClass}>Date</label>
-                <CalendarPicker value={date} onChange={(val) => setDate(val)} className="w-full" />
-                {errors.date && <p className={errorClass}>{errors.date}</p>}
-              </div>
-            </div>
-
-            {/* Account */}
-            <div className="mb-4">
-              <label className={labelClass}>{type === 'income' ? 'Received Into' : 'Paid From'}</label>
-              <Select
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-                options={usableAccounts.map(accountOption)}
-                placeholder="Select account"
-              />
-              {errors.accountId && <p className={errorClass}>{errors.accountId}</p>}
-            </div>
-
-            {/* Category */}
-            <div className="mb-4">
-              <label className={labelClass}>Category</label>
-              <Select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                options={categoryOptions(filteredCategories)}
-                placeholder="Select category"
-              />
-              {errors.categoryId && <p className={errorClass}>{errors.categoryId}</p>}
-            </div>
-
-            {/* Beneficiary + Notes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass}>Beneficiary</label>
+          {/* Amount + Date */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className={labelClass}>Amount</label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-lg font-bold text-gray-300">₹</span>
                 <input
-                  type="text"
-                  value={beneficiary}
-                  onChange={(e) => setBeneficiary(e.target.value)}
-                  className={inputClass}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={values.amount}
+                  onChange={(e) => setField('amount', e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 pl-8 pr-3 py-2.5 text-sm font-semibold text-gray-900 focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/20"
                 />
               </div>
-              <div>
-                <label className={labelClass}>Notes</label>
-                <input
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className={inputClass}
-                  placeholder="Optional"
-                />
-              </div>
+              {errors.amount && <p className={errorClass}>{errors.amount}</p>}
+            </div>
+
+            <div>
+              <label className={labelClass}>Date</label>
+              <CalendarPicker value={values.date} onChange={(val) => setField('date', val)} className="w-full" />
+              {errors.date && <p className={errorClass}>{errors.date}</p>}
             </div>
           </div>
-        </>
+
+          {/* Account */}
+          <div className="mb-4">
+            <label className={labelClass}>{values.type === 'income' ? 'Received Into' : 'Paid From'}</label>
+            <Select
+              value={values.account_id}
+              onChange={(e) => setField('account_id', e.target.value)}
+              options={usableAccounts.map(accountOption)}
+              placeholder="Select account"
+            />
+            {errors.account_id && <p className={errorClass}>{errors.account_id}</p>}
+          </div>
+
+          {/* Category */}
+          <div className="mb-4">
+            <label className={labelClass}>Category</label>
+            <Select
+              value={values.category_id}
+              onChange={(e) => setField('category_id', e.target.value)}
+              options={categoryOptions(filteredCategories)}
+              placeholder="Select category"
+            />
+            {errors.category_id && <p className={errorClass}>{errors.category_id}</p>}
+          </div>
+
+          {/* Beneficiary + Notes */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Beneficiary</label>
+              <input
+                type="text"
+                value={values.beneficiary}
+                onChange={(e) => setField('beneficiary', e.target.value)}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Notes</label>
+              <input
+                type="text"
+                value={values.notes}
+                onChange={(e) => setField('notes', e.target.value)}
+                className={inputClass}
+                placeholder="Optional"
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {errors.submit && (
@@ -335,7 +381,7 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
             onClick={handleViewLinkedTxn}
             className="flex-1 min-w-[120px] rounded-xl bg-accent-light text-brand py-2.5 text-sm font-semibold hover:bg-accent/30 transition-colors"
           >
-            View linked transaction
+            View Linked Transaction
           </button>
         )}
         {!isLinked && (

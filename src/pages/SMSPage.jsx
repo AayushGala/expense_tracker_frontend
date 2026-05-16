@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../api/client';
 import { useData } from '../context/DataContext';
+import { useUrlFilters } from '../hooks/useUrlFilters';
 import Card from '../components/common/Card';
 import Modal from '../components/common/Modal';
 import MultiSelect from '../components/common/MultiSelect';
@@ -29,6 +30,16 @@ const EMPTY_FILTERS = {
   search: '',
 };
 
+// Schema for useUrlFilters — statuses/devices are repeated params, the rest
+// are single-value strings.
+const FILTER_SCHEMA = {
+  statuses: { array: true },
+  devices:  { array: true },
+  dateFrom: {},
+  dateTo:   {},
+  search:   {},
+};
+
 function bodyPreview(body, max = 80) {
   if (!body) return '';
   const collapsed = body.replace(/\s+/g, ' ').trim();
@@ -40,7 +51,9 @@ export default function SMSPage() {
 
   const [smsMessages, setSmsMessages] = useState([]);
   const [devices, setDevices] = useState([]);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  // Filters are URL-backed: reload preserves them, links can be shared, and
+  // browser back/forward works as expected.
+  const [filters, setFilters] = useUrlFilters(FILTER_SCHEMA, EMPTY_FILTERS);
   // Debounced copy of filters.search — actual API trigger. Updates 300ms after
   // the user stops typing so we don't fire a request per keystroke.
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -94,7 +107,7 @@ export default function SMSPage() {
   }, []);
 
   function onFilterChange(key, value) {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+    setFilters({ [key]: value });
   }
 
   function resetFilters() {

@@ -8,6 +8,10 @@ import {
   computeNetWorth,
 } from './accounting';
 
+// All accounting helpers return Decimal instances post-Phase-6. The tests
+// compare via .toNumber() since the test assertions deal in plain numbers,
+// but the precision benefit is real — see the floating-point test below.
+
 // ---------------------------------------------------------------------------
 // validateEntries
 // ---------------------------------------------------------------------------
@@ -20,9 +24,9 @@ describe('validateEntries', () => {
     ];
     const result = validateEntries(entries);
     expect(result.valid).toBe(true);
-    expect(result.totalDebits).toBe(100);
-    expect(result.totalCredits).toBe(100);
-    expect(result.difference).toBe(0);
+    expect(result.totalDebits.toNumber()).toBe(100);
+    expect(result.totalCredits.toNumber()).toBe(100);
+    expect(result.difference.toNumber()).toBe(0);
   });
 
   it('returns invalid for unbalanced entries', () => {
@@ -32,7 +36,7 @@ describe('validateEntries', () => {
     ];
     const result = validateEntries(entries);
     expect(result.valid).toBe(false);
-    expect(result.difference).toBe(150);
+    expect(result.difference.toNumber()).toBe(150);
   });
 
   it('handles multiple entries that sum to balanced', () => {
@@ -44,24 +48,27 @@ describe('validateEntries', () => {
     ];
     const result = validateEntries(entries);
     expect(result.valid).toBe(true);
-    expect(result.totalDebits).toBe(100);
-    expect(result.totalCredits).toBe(100);
+    expect(result.totalDebits.toNumber()).toBe(100);
+    expect(result.totalCredits.toNumber()).toBe(100);
   });
 
   it('handles empty entries', () => {
     const result = validateEntries([]);
     expect(result.valid).toBe(true);
-    expect(result.difference).toBe(0);
+    expect(result.difference.toNumber()).toBe(0);
   });
 
-  it('handles floating-point precision correctly', () => {
+  it('handles floating-point precision correctly via Decimal arithmetic', () => {
+    // The classic 0.1 + 0.2 ≠ 0.3 in IEEE 754. With Decimal the sum is exact,
+    // so this case passes WITHOUT the rounding fudge the old impl used.
     const entries = [
-      { amount: 0.1, entry_type: ENTRY_TYPE.DEBIT },
-      { amount: 0.2, entry_type: ENTRY_TYPE.DEBIT },
-      { amount: 0.3, entry_type: ENTRY_TYPE.CREDIT },
+      { amount: '0.1', entry_type: ENTRY_TYPE.DEBIT },
+      { amount: '0.2', entry_type: ENTRY_TYPE.DEBIT },
+      { amount: '0.3', entry_type: ENTRY_TYPE.CREDIT },
     ];
     const result = validateEntries(entries);
     expect(result.valid).toBe(true);
+    expect(result.difference.toString()).toBe('0');
   });
 });
 
@@ -77,8 +84,8 @@ describe('computeRawBalance', () => {
       { account_id: 'a_2', amount: 300, entry_type: ENTRY_TYPE.DEBIT },
     ];
     const result = computeRawBalance(entries, 'a_1');
-    expect(result.debits).toBe(500);
-    expect(result.credits).toBe(200);
+    expect(result.debits.toNumber()).toBe(500);
+    expect(result.credits.toNumber()).toBe(200);
   });
 
   it('returns zeros for an account with no entries', () => {
@@ -86,8 +93,8 @@ describe('computeRawBalance', () => {
       { account_id: 'a_1', amount: 100, entry_type: ENTRY_TYPE.DEBIT },
     ];
     const result = computeRawBalance(entries, 'a_99');
-    expect(result.debits).toBe(0);
-    expect(result.credits).toBe(0);
+    expect(result.debits.toNumber()).toBe(0);
+    expect(result.credits.toNumber()).toBe(0);
   });
 
   it('handles mixed DEBIT/CREDIT entries for the same account', () => {
@@ -98,8 +105,8 @@ describe('computeRawBalance', () => {
       { account_id: 'a_1', amount: 25, entry_type: ENTRY_TYPE.CREDIT },
     ];
     const result = computeRawBalance(entries, 'a_1');
-    expect(result.debits).toBe(175);
-    expect(result.credits).toBe(75);
+    expect(result.debits.toNumber()).toBe(175);
+    expect(result.credits.toNumber()).toBe(75);
   });
 });
 
@@ -115,7 +122,7 @@ describe('computeAccountBalances', () => {
     ];
     const accounts = [{ id: 'a_1', type: 'asset' }];
     const balances = computeAccountBalances(entries, accounts);
-    expect(balances.get('a_1')).toBe(700);
+    expect(balances.get('a_1').toNumber()).toBe(700);
   });
 
   it('computes signed balances for liability (credit-normal) accounts', () => {
@@ -125,7 +132,7 @@ describe('computeAccountBalances', () => {
     ];
     const accounts = [{ id: 'a_2', type: 'liability' }];
     const balances = computeAccountBalances(entries, accounts);
-    expect(balances.get('a_2')).toBe(600);
+    expect(balances.get('a_2').toNumber()).toBe(600);
   });
 
   it('handles multiple accounts of different types', () => {
@@ -140,9 +147,9 @@ describe('computeAccountBalances', () => {
       { id: 'a_3', type: 'receivable' },
     ];
     const balances = computeAccountBalances(entries, accounts);
-    expect(balances.get('a_1')).toBe(5000);
-    expect(balances.get('a_2')).toBe(3000);
-    expect(balances.get('a_3')).toBe(2000);
+    expect(balances.get('a_1').toNumber()).toBe(5000);
+    expect(balances.get('a_2').toNumber()).toBe(3000);
+    expect(balances.get('a_3').toNumber()).toBe(2000);
   });
 
   it('does not include category entries in account balances', () => {
@@ -152,8 +159,7 @@ describe('computeAccountBalances', () => {
     ];
     const accounts = [{ id: 1, type: 'asset' }];
     const balances = computeAccountBalances(entries, accounts);
-    // Only the account entry counts, category entry has account_id: null
-    expect(balances.get(1)).toBe(1000);
+    expect(balances.get(1).toNumber()).toBe(1000);
   });
 });
 
@@ -169,7 +175,7 @@ describe('computeCategoryBalances', () => {
     ];
     const categories = [{ id: 'cat_1', type: 'expense' }];
     const balances = computeCategoryBalances(entries, categories);
-    expect(balances.get('cat_1')).toBe(400);
+    expect(balances.get('cat_1').toNumber()).toBe(400);
   });
 
   it('computes income category as credit-normal', () => {
@@ -179,7 +185,7 @@ describe('computeCategoryBalances', () => {
     ];
     const categories = [{ id: 'cat_2', type: 'income' }];
     const balances = computeCategoryBalances(entries, categories);
-    expect(balances.get('cat_2')).toBe(950);
+    expect(balances.get('cat_2').toNumber()).toBe(950);
   });
 });
 
@@ -200,7 +206,7 @@ describe('computeNetWorth', () => {
       ['a_3', 5000],
     ]);
     // 10000 + 2000 - 5000 = 7000
-    expect(computeNetWorth(balances, accounts)).toBe(7000);
+    expect(computeNetWorth(balances, accounts).toNumber()).toBe(7000);
   });
 
   it('excludes income, expense, and equity accounts', () => {
@@ -217,16 +223,16 @@ describe('computeNetWorth', () => {
       ['a_4', 2000],
     ]);
     // Only asset counts: 5000
-    expect(computeNetWorth(balances, accounts)).toBe(5000);
+    expect(computeNetWorth(balances, accounts).toNumber()).toBe(5000);
   });
 
   it('returns 0 when no accounts are provided', () => {
-    expect(computeNetWorth(new Map(), [])).toBe(0);
+    expect(computeNetWorth(new Map(), []).toNumber()).toBe(0);
   });
 
   it('handles accounts with no balance in the map (defaults to 0)', () => {
     const accounts = [{ id: 'a_1', type: 'asset' }];
     const balances = new Map(); // no entry for a_1
-    expect(computeNetWorth(balances, accounts)).toBe(0);
+    expect(computeNetWorth(balances, accounts).toNumber()).toBe(0);
   });
 });

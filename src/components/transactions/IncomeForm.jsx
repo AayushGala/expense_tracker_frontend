@@ -1,161 +1,73 @@
-import { useEffect, useMemo, useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useOwners } from '../../hooks/useOwners';
-import CalendarPicker from '../common/CalendarPicker';
 import Select from '../common/Select';
-import SourceTransactionPicker from './SourceTransactionPicker';
-import { inputClass, labelClass, errorClass, accountOption, categoryOptions } from '../../utils/formStyles';
+import AmountInput from '../forms/AmountInput';
+import AccountPicker from '../forms/AccountPicker';
+import CategoryPicker from '../forms/CategoryPicker';
+import DateField from '../forms/DateField';
+import RefundFields from './RefundFields';
+import { useRefundMode } from './useRefundMode';
+import { inputClass, labelClass } from '../../utils/formStyles';
+import {
+  validateAmount,
+  validateDate,
+  validateRequired,
+  collectErrors,
+} from '../../utils/formValidators';
+import { D, round2 } from '../../utils/money';
 
-/**
- * Form for recording an income transaction.
- *
- * Special handling: when the user picks the "Refund" category (identified by
- * role='refund'), a source-transaction picker appears. After picking a source,
- * amount and to_account auto-fill from the source. The category sent to the
- * backend stays the Refund category, but the entry generator credits the
- * source's category for the offset (split-brain).
- */
-export default function IncomeForm({ onSubmit, initialData }) {
-  const { accounts, categories, transactions, entries } = useData();
-  const { owners, getAccountOwner } = useOwners();
+// Refund handling lives in useRefundMode + <RefundFields>.
+export default function IncomeForm({ values, errors, dispatch, onSubmit, isEditing }) {
+  const { accounts, categories } = useData();
+  const { owners } = useOwners();
 
-  // Income normally lands in an asset account, but refunds can come back to a
-  // credit card (liability). Allow both.
   const receivingAccounts = accounts.filter(
     (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false,
   );
   const incomeCategories = categories.filter((c) => c.type === 'income');
 
-  // Lookup helpers for the role-tagged refund category.
-  const refundCategory = useMemo(
-    () => categories.find((c) => c.role === 'refund'),
-    [categories]
-  );
-  const refundCategoryId = refundCategory ? String(refundCategory.id) : null;
+  const { isRefundMode, sourceTxn, sourceCategoryName, handleSourceChange } =
+    useRefundMode(values, dispatch);
 
-  const today = new Date().toISOString().slice(0, 10);
-
-  const [amount, setAmount] = useState(initialData?.amount ?? '');
-  const [date, setDate] = useState(initialData?.date ?? today);
-  const [toAccountId, setToAccountId] = useState(String(initialData?.to_account_id ?? ''));
-  const [categoryId, setCategoryId] = useState(String(initialData?.category_id ?? ''));
-  const [sourceTransactionId, setSourceTransactionId] = useState(initialData?.source_transaction_id ?? null);
-  const [owner, setOwner] = useState(initialData?.owner ?? '');
-  const [platform, setPlatform] = useState(initialData?.platform ?? '');
-  const [notes, setNotes] = useState(initialData?.notes ?? '');
-  // Read-only on this form (no input) — values are inherited (e.g., from source
-  // for refunds) and round-tripped on submit so filters by beneficiary/tags
-  // continue to match. Setters are used programmatically by handleSourceChange.
-  const [beneficiary, setBeneficiary] = useState(initialData?.beneficiary ?? '');
-  const [tags, setTags] = useState(initialData?.tags ?? '');
-  const [errors, setErrors] = useState({});
-
-  const isRefundMode = refundCategoryId !== null && categoryId === refundCategoryId;
-
-  // Quick lookup map for entries grouped by transaction id (used for source detail display)
-  const entriesByTxn = useMemo(() => {
-    const map = new Map();
-    for (const e of entries) {
-      if (!map.has(e.transaction_id)) map.set(e.transaction_id, []);
-      map.get(e.transaction_id).push(e);
-    }
-    return map;
-  }, [entries]);
-
-  const sourceTxn = useMemo(() => {
-    if (!sourceTransactionId) return null;
-    return transactions.find((t) => t.id === sourceTransactionId) ?? null;
-  }, [transactions, sourceTransactionId]);
-
-  const sourceCategoryName = useMemo(() => {
-    if (!sourceTxn) return '';
-    const cat = categories.find((c) => c.id === sourceTxn.category_id);
-    return cat?.name ?? '';
-  }, [sourceTxn, categories]);
-
-  // When user switches OUT of refund mode, clear the source link
-  useEffect(() => {
-    if (!isRefundMode && sourceTransactionId) {
-      setSourceTransactionId(null);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRefundMode]);
-
-  // Auto-fill amount, account, owner, beneficiary, platform, tags from the picked
-  // source. Mirrors the inheritance done in TransactionForm.refundInitialData
-  // (Refund button on the source's detail modal) so both refund entry points
-  // produce the same prefilled form.
-  function handleSourceChange(id) {
-    setSourceTransactionId(id);
-    if (!id) {
-      setAmount('');
-      handleToAccountChange('');
-      setBeneficiary('');
-      setPlatform('');
-      setTags('');
-      return;
-    }
-    const sourceTxnPicked = transactions.find((t) => t.id === id);
-    const creditEntry = (entriesByTxn.get(id) ?? [])
-      .find((e) => e.entry_type === 'CREDIT' && e.account_id);
-    if (creditEntry) {
-      setAmount(String(creditEntry.amount));
-      handleToAccountChange(String(creditEntry.account_id));
-    }
-    if (sourceTxnPicked) {
-      // Source's owner takes precedence over the account's default owner
-      if (sourceTxnPicked.owner) setOwner(sourceTxnPicked.owner);
-      setBeneficiary(sourceTxnPicked.beneficiary ?? '');
-      setPlatform(sourceTxnPicked.platform ?? '');
-      setTags(sourceTxnPicked.tags ?? '');
-    }
-  }
-
-  function handleToAccountChange(accountId) {
-    setToAccountId(accountId);
-    setOwner(getAccountOwner(accountId));
+  function setField(name, value) {
+    dispatch({ type: 'SET_FIELD', name, value });
   }
 
   function validate() {
-    const errs = {};
-    const parsedAmount = parseFloat(amount);
-    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
-      errs.amount = 'Enter a valid positive amount.';
-    }
-    if (!date) errs.date = 'Date is required.';
-    if (!toAccountId) errs.toAccountId = 'Select a destination account.';
-    if (!categoryId) errs.categoryId = 'Select an income category.';
-    if (isRefundMode && !sourceTransactionId) {
-      errs.sourceTransactionId = 'Pick the original expense being refunded.';
-    }
-    return errs;
+    return collectErrors({
+      amount: validateAmount(values.amount),
+      date: validateDate(values.date),
+      to_account_id: validateRequired(values.to_account_id, { message: 'Select a destination account.' }),
+      category_id: validateRequired(values.category_id, { message: 'Select an income category.' }),
+      source_transaction_id: isRefundMode
+        ? validateRequired(values.source_transaction_id, { message: 'Pick the original expense being refunded.' })
+        : null,
+    });
   }
 
   function handleSubmit(e) {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length > 0) {
-      setErrors(errs);
+      dispatch({ type: 'SET_ERRORS', errors: errs });
       return;
     }
 
-    const parsedAmount = parseFloat(amount);
-
     const payload = {
       type: 'income',
-      amount: parsedAmount,
-      date,
-      to_account_id: parseInt(toAccountId),
-      category_id: parseInt(categoryId),
-      owner,
-      platform: platform.trim(),
-      notes: notes.trim(),
-      beneficiary,
-      tags,
+      amount: round2(D(values.amount)).toString(),
+      date: values.date,
+      to_account_id: parseInt(values.to_account_id),
+      category_id: parseInt(values.category_id),
+      owner: values.owner,
+      platform: (values.platform ?? '').trim(),
+      notes: (values.notes ?? '').trim(),
+      beneficiary: values.beneficiary ?? '',
+      tags: values.tags ?? '',
     };
 
-    if (sourceTransactionId) {
-      payload.source_transaction_id = sourceTransactionId;
+    if (values.source_transaction_id) {
+      payload.source_transaction_id = values.source_transaction_id;
     }
 
     onSubmit(payload);
@@ -163,153 +75,89 @@ export default function IncomeForm({ onSubmit, initialData }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Amount */}
-      <div>
-        <label htmlFor="txn-amount" className={labelClass}>Amount</label>
-        <div className="relative">
-          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-2xl font-bold text-gray-300">₹</span>
-          <input
-            id="txn-amount"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50/50 pl-10 pr-4 py-4 text-2xl font-bold text-gray-900 transition-colors focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 placeholder-gray-300"
-          />
-        </div>
-        {isRefundMode && (
-          <p className="text-[11px] text-gray-400 mt-1">
-            Auto-filled from the source. Edit for partial refunds.
-          </p>
-        )}
-        {errors.amount && <p className={errorClass}>{errors.amount}</p>}
-      </div>
+      <AmountInput
+        value={values.amount}
+        onChange={(v) => setField('amount', v)}
+        error={errors.amount}
+        helperText={isRefundMode ? 'Auto-filled from the source. Edit for partial refunds.' : undefined}
+      />
 
-      {/* Date + Received Into */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass}>Date</label>
-          <CalendarPicker value={date} onChange={(val) => setDate(val)} className="w-full" />
-          {errors.date && <p className={errorClass}>{errors.date}</p>}
-        </div>
-
-        <div>
-          <label className={labelClass}>Received Into</label>
-          <Select
-            value={toAccountId}
-            onChange={(e) => handleToAccountChange(e.target.value)}
-            options={receivingAccounts.map(accountOption)}
-            placeholder="Select account"
-          />
-          {isRefundMode && (
-            <p className="text-[11px] text-gray-400 mt-1">
-              Defaults to source's account. Override if refunded elsewhere.
-            </p>
-          )}
-          {errors.toAccountId && <p className={errorClass}>{errors.toAccountId}</p>}
-        </div>
+        <DateField value={values.date} onChange={(v) => setField('date', v)} error={errors.date} />
+        <AccountPicker
+          value={values.to_account_id}
+          accounts={receivingAccounts}
+          label="Received Into"
+          error={errors.to_account_id}
+          helperText={isRefundMode ? "Defaults to source's account. Override if refunded elsewhere." : undefined}
+          onChange={(accountId, owner) => {
+            setField('to_account_id', accountId);
+            setField('owner', owner);
+          }}
+        />
       </div>
 
-      {/* Category + Owner */}
       {owners.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass}>Income Category</label>
-            <Select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              options={categoryOptions(incomeCategories)}
-              placeholder="Select category"
-            />
-            {errors.categoryId && <p className={errorClass}>{errors.categoryId}</p>}
-          </div>
-
+          <CategoryPicker
+            value={values.category_id}
+            onChange={(v) => setField('category_id', v)}
+            categories={incomeCategories}
+            label="Income Category"
+            error={errors.category_id}
+          />
           <div>
             <label className={labelClass}>Owner</label>
             <Select
-              value={owner}
-              onChange={(e) => setOwner(e.target.value)}
+              value={values.owner}
+              onChange={(e) => setField('owner', e.target.value)}
               options={owners.map((o) => ({ value: o, label: o }))}
               placeholder="Unassigned"
             />
           </div>
         </div>
       ) : (
-        <div>
-          <label className={labelClass}>Income Category</label>
-          <Select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            options={categoryOptions(incomeCategories)}
-            placeholder="Select category"
-          />
-          {errors.categoryId && <p className={errorClass}>{errors.categoryId}</p>}
-        </div>
+        <CategoryPicker
+          value={values.category_id}
+          onChange={(v) => setField('category_id', v)}
+          categories={incomeCategories}
+          label="Income Category"
+          error={errors.category_id}
+        />
       )}
 
-      {/* Refund-specific section */}
       {isRefundMode && (
-        <div className="space-y-3 p-4 rounded-xl bg-accent-light/40 border border-accent/30">
-          <div>
-            <label className={labelClass}>Original Transaction</label>
-            <SourceTransactionPicker
-              value={sourceTransactionId}
-              onChange={handleSourceChange}
-            />
-            {errors.sourceTransactionId && <p className={errorClass}>{errors.sourceTransactionId}</p>}
-          </div>
-          {sourceTxn && sourceCategoryName && (
-            <div>
-              <label className={labelClass}>Refund Of (Category)</label>
-              <div className="w-full rounded-xl border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm text-gray-700">
-                {sourceCategoryName}
-              </div>
-            </div>
-          )}
-          {beneficiary && (
-            <div>
-              <label className={labelClass}>Beneficiary</label>
-              <div className="w-full rounded-xl border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm text-gray-700">
-                {beneficiary}
-              </div>
-            </div>
-          )}
-          {tags && (
-            <div>
-              <label className={labelClass}>Tags</label>
-              <div className="w-full rounded-xl border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm text-gray-700">
-                {tags}
-              </div>
-            </div>
-          )}
-        </div>
+        <RefundFields
+          sourceTransactionId={values.source_transaction_id}
+          beneficiary={values.beneficiary}
+          tags={values.tags}
+          sourceTxn={sourceTxn}
+          sourceCategoryName={sourceCategoryName}
+          error={errors.source_transaction_id}
+          onSourceChange={handleSourceChange}
+        />
       )}
 
-      {/* Platform */}
       <div>
         <label htmlFor="txn-platform" className={labelClass}>Platform</label>
         <input
           id="txn-platform"
           type="text"
           placeholder="e.g. Swiggy, Amazon, Flipkart"
-          value={platform}
-          onChange={(e) => setPlatform(e.target.value)}
+          value={values.platform}
+          onChange={(e) => setField('platform', e.target.value)}
           className={inputClass}
         />
       </div>
 
-      {/* Notes */}
       <div>
         <label htmlFor="txn-notes" className={labelClass}>Notes</label>
         <textarea
           id="txn-notes"
           rows={3}
           placeholder="Optional notes"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          value={values.notes}
+          onChange={(e) => setField('notes', e.target.value)}
           className={`${inputClass} resize-none`}
         />
       </div>
@@ -324,7 +172,7 @@ export default function IncomeForm({ onSubmit, initialData }) {
                    text-white shadow-sm hover:bg-brand-hover focus:outline-none
                    focus:ring-2 focus:ring-accent/30 transition-colors"
       >
-        {initialData?.id ? (isRefundMode ? 'Update Refund' : 'Update Income') : (isRefundMode ? 'Save Refund' : 'Save Income')}
+        {isEditing ? (isRefundMode ? 'Update Refund' : 'Update Income') : (isRefundMode ? 'Save Refund' : 'Save Income')}
       </button>
     </form>
   );

@@ -1,23 +1,35 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
+
+// A simple counter so multiple open modals share one body-overflow lock.
+// Without this, closing modal A while modal B is still open would let the
+// page scroll behind B.
+let openCount = 0;
+
+function lockBodyScroll() {
+  if (openCount === 0) document.body.style.overflow = 'hidden';
+  openCount += 1;
+}
+
+function unlockBodyScroll() {
+  openCount = Math.max(0, openCount - 1);
+  if (openCount === 0) document.body.style.overflow = '';
+}
 
 export default function Modal({ isOpen, onClose, children, title, maxWidth = 'max-w-lg' }) {
-  const handleKeyDown = useCallback(
-    (e) => {
-      if (e.key === 'Escape') onClose();
-    },
-    [onClose]
-  );
+  // Only the topmost modal closes on ESC — see useEscapeKey for the stack
+  // mechanic. Focus is trapped inside the panel while open; on close, focus
+  // restores to whatever element had it before opening.
+  useEscapeKey(isOpen, onClose);
+  const panelRef = useFocusTrap(isOpen);
 
   useEffect(() => {
-    if (!isOpen) return;
-    document.addEventListener('keydown', handleKeyDown);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-    };
-  }, [isOpen, handleKeyDown]);
+    if (!isOpen) return undefined;
+    lockBodyScroll();
+    return unlockBodyScroll;
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -36,6 +48,7 @@ export default function Modal({ isOpen, onClose, children, title, maxWidth = 'ma
 
       {/* Panel */}
       <div
+        ref={panelRef}
         className={`relative z-10 w-full ${maxWidth} rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh] ring-1 ring-gray-200/60`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -65,6 +78,6 @@ export default function Modal({ isOpen, onClose, children, title, maxWidth = 'ma
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

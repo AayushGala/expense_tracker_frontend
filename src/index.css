@@ -61,6 +61,12 @@
   100% { width: 0%; margin-left: 100%; }
 }
 
+/* Toast slide-in (used by ToastContext) */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Smooth transitions */
 * {
   -webkit-tap-highlight-color: transparent;

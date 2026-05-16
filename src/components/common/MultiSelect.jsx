@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useFloatingMenu } from '../../hooks/useFloatingMenu';
 
 /**
  * Flat checkbox multi-select with search, select-all, and portal-positioned menu.
@@ -22,10 +23,16 @@ export default function MultiSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const triggerRef = useRef(null);
-  const menuRef = useRef(null);
   const searchRef = useRef(null);
-  const [menuStyle, setMenuStyle] = useState({});
+  // Menu positioning lives in useFloatingMenu — see hook for details.
+  // menuHeight 320 ≈ max-h-80 (20rem). desiredWidth = max(rect.width, 220)
+  // via the hook's minWidth=220. margin=8 keeps the menu off viewport edges.
+  const { triggerRef, menuRef, menuStyle, updatePosition } = useFloatingMenu({
+    open,
+    menuHeight: 320,
+    minWidth: 220,
+    margin: 8,
+  });
 
   const searchLower = search.toLowerCase();
   const filteredOptions = useMemo(() => {
@@ -60,42 +67,6 @@ export default function MultiSelect({
       onChange(filteredOptions.map((o) => o.value));
     }
   }
-
-  // Position menu (mirrors CategoryFilter)
-  const updatePosition = useCallback(() => {
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    const menuHeight = 320;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const openAbove = spaceBelow < menuHeight && rect.top > spaceBelow;
-
-    const margin = 8;
-    const desiredWidth = Math.max(rect.width, 220);
-    const width = Math.min(desiredWidth, window.innerWidth - margin * 2);
-    let left = rect.left;
-    if (left + width > window.innerWidth - margin) {
-      left = window.innerWidth - margin - width;
-    }
-    if (left < margin) left = margin;
-
-    const base = { position: 'fixed', left, width, minWidth: width };
-    if (openAbove) {
-      setMenuStyle({ ...base, bottom: window.innerHeight - rect.top + 6 });
-    } else {
-      setMenuStyle({ ...base, top: rect.bottom + 6 });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    updatePosition();
-    window.addEventListener('scroll', updatePosition, true);
-    window.addEventListener('resize', updatePosition);
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true);
-      window.removeEventListener('resize', updatePosition);
-    };
-  }, [open, updatePosition]);
 
   useEffect(() => {
     if (open) {

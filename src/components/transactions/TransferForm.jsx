@@ -1,167 +1,123 @@
-import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useOwners } from '../../hooks/useOwners';
-import CalendarPicker from '../common/CalendarPicker';
 import Select from '../common/Select';
-import { inputClass, labelClass, errorClass, accountOption } from '../../utils/formStyles';
+import AmountInput from '../forms/AmountInput';
+import AccountPicker from '../forms/AccountPicker';
+import DateField from '../forms/DateField';
+import { inputClass, labelClass } from '../../utils/formStyles';
 import { formatINR } from '../../utils/formatters';
+import {
+  validateAmount,
+  validateOptionalAmount,
+  validateDate,
+  validateRequired,
+  validateDifferentAccounts,
+  collectErrors,
+} from '../../utils/formValidators';
+import { D, round2 } from '../../utils/money';
 
-/**
- * Form for recording a transfer between two asset/liability accounts.
- *
- * @param {Object}   props
- * @param {Function} props.onSubmit - Called with (transaction, entries)
- */
-export default function TransferForm({ onSubmit, initialData }) {
+export default function TransferForm({ values, errors, dispatch, onSubmit, isEditing }) {
   const { accounts, categories } = useData();
-  const { owners, getAccountOwner } = useOwners();
+  const { owners } = useOwners();
 
   const eligibleAccounts = accounts.filter(
-    (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false
+    (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false,
   );
-
   const expenseCategories = categories.filter((c) => c.type === 'expense');
 
-  const today = new Date().toISOString().slice(0, 10);
-
-  const [amount, setAmount] = useState(initialData?.amount ?? '');
-  const [date, setDate] = useState(initialData?.date ?? today);
-  const [fromAccountId, setFromAccountId] = useState(String(initialData?.from_account_id ?? ''));
-  const [toAccountId, setToAccountId] = useState(String(initialData?.to_account_id ?? ''));
-  const [fee, setFee] = useState(initialData?.fee ?? '');
-  const [feeCategoryId, setFeeCategoryId] = useState(String(initialData?.fee_category_id ?? ''));
-  const [owner, setOwner] = useState(initialData?.owner ?? '');
-  const [platform, setPlatform] = useState(initialData?.platform ?? '');
-  const [notes, setNotes] = useState(initialData?.notes ?? '');
-  const [errors, setErrors] = useState({});
-
-  function handleFromAccountChange(accountId) {
-    setFromAccountId(accountId);
-    setOwner(getAccountOwner(accountId));
+  function setField(name, value) {
+    dispatch({ type: 'SET_FIELD', name, value });
   }
 
   function validate() {
-    const errs = {};
-    const parsedAmount = parseFloat(amount);
-    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
-      errs.amount = 'Enter a valid positive amount.';
-    }
-    if (!date) errs.date = 'Date is required.';
-    if (!fromAccountId) errs.fromAccountId = 'Select the source account.';
-    if (!toAccountId) errs.toAccountId = 'Select the destination account.';
-    if (fromAccountId && toAccountId && fromAccountId === toAccountId) {
-      errs.toAccountId = 'Source and destination must be different accounts.';
-    }
-    const parsedFee = parseFloat(fee);
-    if (fee && (isNaN(parsedFee) || parsedFee < 0)) {
-      errs.fee = 'Enter a valid fee amount.';
-    }
-    if (parsedFee > 0 && !feeCategoryId) {
-      errs.feeCategory = 'Select a category for the fee.';
-    }
-    return errs;
+    const feeDec = D(values.fee);
+    return collectErrors({
+      amount: validateAmount(values.amount),
+      date: validateDate(values.date),
+      from_account_id: validateRequired(values.from_account_id, { message: 'Select the source account.' }),
+      to_account_id:
+        validateRequired(values.to_account_id, { message: 'Select the destination account.' }) ??
+        validateDifferentAccounts(values.from_account_id, values.to_account_id),
+      fee: validateOptionalAmount(values.fee),
+      fee_category_id: feeDec.gt(0)
+        ? validateRequired(values.fee_category_id, { message: 'Select a category for the fee.' })
+        : null,
+    });
   }
 
   function handleSubmit(e) {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length > 0) {
-      setErrors(errs);
+      dispatch({ type: 'SET_ERRORS', errors: errs });
       return;
     }
 
-    const parsedAmount = parseFloat(amount);
-    const parsedFee = parseFloat(fee) || 0;
+    const amountStr = round2(D(values.amount)).toString();
+    const feeDec = D(values.fee);
 
     const payload = {
       type: 'transfer',
-      amount: parsedAmount,
-      date,
-      from_account_id: parseInt(fromAccountId),
-      to_account_id: parseInt(toAccountId),
-      owner,
-      platform: platform.trim(),
-      notes: notes.trim(),
+      amount: amountStr,
+      date: values.date,
+      from_account_id: parseInt(values.from_account_id),
+      to_account_id: parseInt(values.to_account_id),
+      owner: values.owner,
+      platform: (values.platform ?? '').trim(),
+      notes: (values.notes ?? '').trim(),
     };
 
-    if (parsedFee > 0 && feeCategoryId) {
-      payload.fee = parsedFee;
-      payload.fee_category_id = parseInt(feeCategoryId);
+    if (feeDec.gt(0) && values.fee_category_id) {
+      payload.fee = round2(feeDec).toString();
+      payload.fee_category_id = parseInt(values.fee_category_id);
     }
 
     onSubmit(payload);
   }
 
-  const parsedAmount = parseFloat(amount) || 0;
-  const parsedFee = parseFloat(fee) || 0;
-  const totalDebited = parsedAmount + parsedFee;
-
+  const parsedAmount = D(values.amount);
+  const parsedFee = D(values.fee);
+  const totalDebited = parsedAmount.plus(parsedFee);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Amount */}
-      <div>
-        <label htmlFor="txn-amount" className={labelClass}>Amount</label>
-        <div className="relative">
-          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-2xl font-bold text-gray-300">₹</span>
-          <input
-            id="txn-amount"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50/50 pl-10 pr-4 py-4 text-2xl font-bold text-gray-900 transition-colors focus:border-accent focus:bg-white focus:outline-none focus:ring-2 focus:ring-accent/20 placeholder-gray-300"
-          />
-        </div>
-        {errors.amount && <p className={errorClass}>{errors.amount}</p>}
+      <AmountInput
+        value={values.amount}
+        onChange={(v) => setField('amount', v)}
+        error={errors.amount}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <DateField value={values.date} onChange={(v) => setField('date', v)} error={errors.date} />
+        <AccountPicker
+          value={values.from_account_id}
+          accounts={eligibleAccounts}
+          label="From Account"
+          placeholder="Select source account"
+          error={errors.from_account_id}
+          onChange={(accountId, owner) => {
+            setField('from_account_id', accountId);
+            setField('owner', owner);
+          }}
+        />
       </div>
 
-      {/* Date + From Account */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass}>Date</label>
-          <CalendarPicker value={date} onChange={(val) => setDate(val)} className="w-full" />
-          {errors.date && <p className={errorClass}>{errors.date}</p>}
-        </div>
-
-        <div>
-          <label className={labelClass}>From Account</label>
-          <Select
-            value={fromAccountId}
-            onChange={(e) => handleFromAccountChange(e.target.value)}
-            options={eligibleAccounts.map(accountOption)}
-            placeholder="Select source account"
-          />
-          {errors.fromAccountId && (
-            <p className={errorClass}>{errors.fromAccountId}</p>
-          )}
-        </div>
-      </div>
-
-      {/* To Account + Owner */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass}>To Account</label>
-          <Select
-            value={toAccountId}
-            onChange={(e) => setToAccountId(e.target.value)}
-            options={eligibleAccounts.map(accountOption)}
-            placeholder="Select destination account"
-          />
-          {errors.toAccountId && (
-            <p className={errorClass}>{errors.toAccountId}</p>
-          )}
-        </div>
+        <AccountPicker
+          value={values.to_account_id}
+          accounts={eligibleAccounts}
+          label="To Account"
+          placeholder="Select destination account"
+          error={errors.to_account_id}
+          onChange={(accountId) => setField('to_account_id', accountId)}
+        />
 
         {owners.length > 0 && (
           <div>
             <label className={labelClass}>Owner</label>
             <Select
-              value={owner}
-              onChange={(e) => setOwner(e.target.value)}
+              value={values.owner}
+              onChange={(e) => setField('owner', e.target.value)}
               options={owners.map((o) => ({ value: o, label: o }))}
               placeholder="Unassigned"
             />
@@ -169,67 +125,55 @@ export default function TransferForm({ onSubmit, initialData }) {
         )}
       </div>
 
-      {/* Fee (optional) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="txn-fee" className={labelClass}>Fee / Surcharge <span className="text-gray-400 font-normal">(optional)</span></label>
-          <div className="relative">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-300">₹</span>
-            <input
-              id="txn-fee"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
-              value={fee}
-              onChange={(e) => setFee(e.target.value)}
-              className={`${inputClass} pl-8`}
-            />
-          </div>
-          {errors.fee && <p className={errorClass}>{errors.fee}</p>}
-        </div>
-
+        <AmountInput
+          id="txn-fee"
+          label={<>Fee / Surcharge <span className="text-gray-400 font-normal">(optional)</span></>}
+          variant="compact"
+          value={values.fee}
+          onChange={(v) => setField('fee', v)}
+          error={errors.fee}
+        />
         <div>
           <label className={labelClass}>Fee Category</label>
           <Select
-            value={feeCategoryId}
-            onChange={(e) => setFeeCategoryId(e.target.value)}
+            value={values.fee_category_id}
+            onChange={(e) => setField('fee_category_id', e.target.value)}
             options={expenseCategories.map((c) => ({ value: String(c.id), label: c.name }))}
             placeholder="Select fee category"
           />
-          {errors.feeCategory && <p className={errorClass}>{errors.feeCategory}</p>}
+          {errors.fee_category_id && (
+            <p className="mt-1.5 text-xs text-rose-500 font-medium">{errors.fee_category_id}</p>
+          )}
         </div>
       </div>
 
-      {parsedFee > 0 && (
+      {parsedFee.gt(0) && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
           <span className="font-medium">Total debited:</span> {formatINR(totalDebited)} ({formatINR(parsedAmount)} transfer + {formatINR(parsedFee)} fee)
         </div>
       )}
 
-      {/* Platform */}
       <div>
         <label htmlFor="txn-platform" className={labelClass}>Platform</label>
         <input
           id="txn-platform"
           type="text"
           placeholder="e.g. Swiggy, Amazon, Flipkart"
-          value={platform}
-          onChange={(e) => setPlatform(e.target.value)}
+          value={values.platform}
+          onChange={(e) => setField('platform', e.target.value)}
           className={inputClass}
         />
       </div>
 
-      {/* Notes */}
       <div>
         <label htmlFor="txn-notes" className={labelClass}>Notes</label>
         <textarea
           id="txn-notes"
           rows={3}
           placeholder="Optional notes"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          value={values.notes}
+          onChange={(e) => setField('notes', e.target.value)}
           className={`${inputClass} resize-none`}
         />
       </div>
@@ -244,7 +188,7 @@ export default function TransferForm({ onSubmit, initialData }) {
                    text-white shadow-sm hover:bg-brand-hover focus:outline-none
                    focus:ring-2 focus:ring-accent/30 transition-colors"
       >
-        {initialData ? 'Update Transfer' : 'Save Transfer'}
+        {isEditing ? 'Update Transfer' : 'Save Transfer'}
       </button>
     </form>
   );

@@ -1,18 +1,37 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { DataProvider, useData } from './context/DataContext'
+import { ToastProvider } from './context/ToastContext'
 import AppLayout from './components/layout/AppLayout'
-import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
-import DashboardPage from './pages/DashboardPage'
-import TransactionsPage from './pages/TransactionsPage'
-import AccountsPage from './pages/AccountsPage'
-import ReportsPage from './pages/ReportsPage'
-import SettingsPage from './pages/SettingsPage'
-import SMSPage from './pages/SMSPage'
-import TransactionForm from './components/transactions/TransactionForm'
 import LoadingSpinner from './components/common/LoadingSpinner'
 import ErrorBoundary from './components/common/ErrorBoundary'
+
+// Each route is its own chunk. The initial bundle drops to just the shell
+// (App, AuthContext, DataContext, AppLayout, common primitives); pages and
+// their dependencies load on navigation. Recharts in particular only loads
+// when the user opens /reports — Vite's manualChunks config splits it
+// further into its own vendor bundle.
+const LoginPage       = lazy(() => import('./pages/LoginPage'))
+const RegisterPage    = lazy(() => import('./pages/RegisterPage'))
+const DashboardPage   = lazy(() => import('./pages/DashboardPage'))
+const TransactionsPage = lazy(() => import('./pages/TransactionsPage'))
+const AccountsPage    = lazy(() => import('./pages/AccountsPage'))
+const ReportsPage     = lazy(() => import('./pages/ReportsPage'))
+const SettingsPage    = lazy(() => import('./pages/SettingsPage'))
+const SMSPage         = lazy(() => import('./pages/SMSPage'))
+const TransactionForm = lazy(() => import('./components/transactions/TransactionForm'))
+
+// Small fallback for route transitions. DataGate still handles the initial
+// app-wide load with its branded screen; this just covers the brief moment
+// while a route chunk is being fetched.
+function RouteFallback() {
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center">
+      <LoadingSpinner size="h-8 w-8" />
+    </div>
+  )
+}
 
 function AuthGate({ children }) {
   const { isAuthenticated, isLoading } = useAuth()
@@ -69,37 +88,43 @@ function DataGate({ children }) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route
-          path="/*"
-          element={
-            <AuthGate>
-              <DataProvider>
-                <DataGate>
-                  <ErrorBoundary>
-                    <Routes>
-                      <Route element={<AppLayout />}>
-                        <Route path="/" element={<DashboardPage />} />
-                        <Route path="/transactions" element={<TransactionsPage />} />
-                        <Route path="/transactions/new" element={<TransactionForm />} />
-                        <Route path="/transactions/:id/edit" element={<TransactionForm />} />
-                        <Route path="/accounts" element={<AccountsPage />} />
-                        <Route path="/reports" element={<ReportsPage />} />
-                        <Route path="/sms" element={<SMSPage />} />
-                        <Route path="/settings" element={<SettingsPage />} />
-                      </Route>
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                  </ErrorBoundary>
-                </DataGate>
-              </DataProvider>
-            </AuthGate>
-          }
-        />
-      </Routes>
-    </AuthProvider>
+    <ToastProvider>
+      <ErrorBoundary>
+        <AuthProvider>
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route
+                path="/*"
+                element={
+                  <AuthGate>
+                    <DataProvider>
+                      <DataGate>
+                        <Suspense fallback={<RouteFallback />}>
+                          <Routes>
+                            <Route element={<AppLayout />}>
+                              <Route path="/" element={<DashboardPage />} />
+                              <Route path="/transactions" element={<TransactionsPage />} />
+                              <Route path="/transactions/new" element={<TransactionForm />} />
+                              <Route path="/transactions/:id/edit" element={<TransactionForm />} />
+                              <Route path="/accounts" element={<AccountsPage />} />
+                              <Route path="/reports" element={<ReportsPage />} />
+                              <Route path="/sms" element={<SMSPage />} />
+                              <Route path="/settings" element={<SettingsPage />} />
+                            </Route>
+                            <Route path="*" element={<Navigate to="/" replace />} />
+                          </Routes>
+                        </Suspense>
+                      </DataGate>
+                    </DataProvider>
+                  </AuthGate>
+                }
+              />
+            </Routes>
+          </Suspense>
+        </AuthProvider>
+      </ErrorBoundary>
+    </ToastProvider>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useFloatingMenu } from '../../hooks/useFloatingMenu';
 
 // Global registry: when any dropdown opens, it calls closeAll first
 const openDropdowns = new Set();
@@ -11,12 +12,16 @@ function closeAll() {
 export default function Dropdown({ value, onChange, options = [], placeholder, className = '' }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const triggerRef = useRef(null);
-  const menuRef = useRef(null);
   const searchRef = useRef(null);
   const optionRefs = useRef([]);
   const focusedIndexRef = useRef(-1);
-  const [menuStyle, setMenuStyle] = useState({});
+  // Menu positioning lives in useFloatingMenu — see hook for details.
+  // menuHeight 240 ≈ max-h-60 (15rem), minWidth 160 matches the old behavior.
+  const { triggerRef, menuRef, menuStyle, updatePosition } = useFloatingMenu({
+    open,
+    menuHeight: 240,
+    minWidth: 160,
+  });
 
   const selectedOption = options.find((o) => o.value === value);
   const displayLabel = selectedOption?.label ?? placeholder ?? 'Select...';
@@ -54,45 +59,6 @@ export default function Dropdown({ value, onChange, options = [], placeholder, c
       }
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Position the menu beneath (or above) the trigger
-  const updatePosition = useCallback(() => {
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    const menuHeight = 240; // max-h-60 = 15rem = 240px
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    const openAbove = spaceBelow < menuHeight && spaceAbove > spaceBelow;
-
-    if (openAbove) {
-      setMenuStyle({
-        position: 'fixed',
-        bottom: window.innerHeight - rect.top + 6,
-        left: rect.left,
-        width: rect.width,
-        minWidth: 160,
-      });
-    } else {
-      setMenuStyle({
-        position: 'fixed',
-        top: rect.bottom + 6,
-        left: rect.left,
-        width: rect.width,
-        minWidth: 160,
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    updatePosition();
-    window.addEventListener('scroll', updatePosition, true);
-    window.addEventListener('resize', updatePosition);
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true);
-      window.removeEventListener('resize', updatePosition);
-    };
-  }, [open, updatePosition]);
 
   // Close on outside click
   useEffect(() => {

@@ -63,32 +63,16 @@ describe('formatDate', () => {
 // ---------------------------------------------------------------------------
 
 describe('transactionTypeLabel', () => {
-  it('returns "Expense" for expense type', () => {
-    expect(transactionTypeLabel('expense')).toBe('Expense');
-  });
-
-  it('returns "Income" for income type', () => {
-    expect(transactionTypeLabel('income')).toBe('Income');
-  });
-
-  it('returns "Transfer" for transfer type', () => {
-    expect(transactionTypeLabel('transfer')).toBe('Transfer');
-  });
-
-  it('returns "Bill Payment" for bill_payment type', () => {
-    expect(transactionTypeLabel('bill_payment')).toBe('Bill Payment');
-  });
-
-  it('returns "Investment" for investment type', () => {
-    expect(transactionTypeLabel('investment')).toBe('Investment');
-  });
-
-  it('returns "Split Expense" for split_expense type', () => {
-    expect(transactionTypeLabel('split_expense')).toBe('Split Expense');
-  });
-
-  it('returns "Reimbursement" for reimbursement type', () => {
-    expect(transactionTypeLabel('reimbursement')).toBe('Reimbursement');
+  it.each([
+    ['expense',       'Expense'],
+    ['income',        'Income'],
+    ['transfer',      'Transfer'],
+    ['bill_payment',  'Bill Payment'],
+    ['investment',    'Investment'],
+    ['split_expense', 'Split Expense'],
+    ['reimbursement', 'Reimbursement'],
+  ])('maps %s -> %s', (type, label) => {
+    expect(transactionTypeLabel(type)).toBe(label);
   });
 
   it('returns the raw type string for an unknown type', () => {

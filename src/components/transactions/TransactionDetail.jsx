@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
+import { useToast } from '../../context/ToastContext';
 import { formatDate, formatINR, transactionTypeLabel } from '../../utils/formatters';
+import { D, sum, ZERO } from '../../utils/money';
 import Badge from '../common/Badge';
 
 export default function TransactionDetail({
@@ -12,6 +14,7 @@ export default function TransactionDetail({
   onSelectTransaction,
 }) {
   const navigate = useNavigate();
+  const toast = useToast();
   const { accounts, categories, transactions, entries: allEntries, deleteTransaction } = useData();
 
   const accountMap = useMemo(
@@ -34,9 +37,14 @@ export default function TransactionDetail({
       'Delete this transaction? This cannot be undone.'
     );
     if (!confirmed) return;
-    await deleteTransaction(transaction.id);
-    onDeleted?.();
-    onClose();
+    try {
+      await deleteTransaction(transaction.id);
+      toast.success('Transaction deleted');
+      onDeleted?.();
+      onClose();
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete transaction.');
+    }
   }
 
   function handleEdit() {
@@ -49,7 +57,6 @@ export default function TransactionDetail({
     onClose();
   }
 
-  // Source transaction link (for refunds and any income with source set)
   const sourceTransactionId = transaction.source_transaction ?? null;
   const sourceTxn = useMemo(() => {
     if (!sourceTransactionId) return null;
@@ -75,47 +82,40 @@ export default function TransactionDetail({
     }
   }
 
-  // Refunds attached to this transaction (only meaningful for expenses)
   const linkedRefunds = useMemo(() => {
     return transactions
       .filter((t) => t.source_transaction === transaction.id)
       .map((t) => {
         const txnEntries = allEntries.filter((e) => e.transaction_id === t.id);
         const debitEntry = txnEntries.find((e) => e.entry_type === 'DEBIT' && e.account_id);
-        return { ...t, amount: debitEntry?.amount ?? 0 };
+        return { ...t, amount: debitEntry?.amount ?? ZERO };
       })
       .sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [transactions, allEntries, transaction.id]);
 
-  const totalRefunded = linkedRefunds.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+  const totalRefunded = sum(linkedRefunds.map((r) => r.amount));
 
   const {
     type, amount, date, notes, beneficiary, platform, tags,
     category_id, created_at,
   } = transaction;
 
-  // `transaction.amount` is enriched by useTransactions on the TransactionsPage
-  // hook, but callers from other pages (SMS modal, account ledger) pass the raw
-  // transaction row, which has no amount column server-side. Fall back to
-  // computing from the entries (debits == credits for a balanced txn).
+  // useTransactions enriches transactions with `amount`; callers from other
+  // pages (SMS modal, account ledger) pass raw rows that have no amount.
+  // Fall back to summing entries (debits == credits for a balanced txn).
   const displayAmount = useMemo(() => {
-    if (amount != null && amount !== '') return Number(amount);
-    const debits = entries
-      .filter((e) => e.entry_type === 'DEBIT')
-      .reduce((s, e) => s + Number(e.amount || 0), 0);
-    const credits = entries
-      .filter((e) => e.entry_type === 'CREDIT')
-      .reduce((s, e) => s + Number(e.amount || 0), 0);
-    return Math.max(debits, credits);
+    if (amount != null && amount !== '') return D(amount);
+    const debits = sum(entries.filter((e) => e.entry_type === 'DEBIT').map((e) => e.amount));
+    const credits = sum(entries.filter((e) => e.entry_type === 'CREDIT').map((e) => e.amount));
+    return debits.gt(credits) ? debits : credits;
   }, [amount, entries]);
 
-  // Derive account info from entries since the transaction model doesn't store account IDs
+  // Account info lives in entries; transaction model doesn't store it.
   const accountIds = new Set(accounts.map((a) => a.id));
   const accountEntries = entries.filter((e) => e.account_id != null);
   const debitAccount = accountEntries.find((e) => e.entry_type === 'DEBIT');
   const creditAccount = accountEntries.find((e) => e.entry_type === 'CREDIT');
 
-  // Determine "from" and "to" based on transaction type
   let fromName = null;
   let toName = null;
   if (type === 'expense' || type === 'split_expense') {
@@ -169,7 +169,7 @@ export default function TransactionDetail({
               ↩ Refunded · {formatINR(totalRefunded)}
             </p>
             <p className="text-[11px] text-gray-400">
-              Net: {formatINR(displayAmount - totalRefunded)}
+              Net: {formatINR(D(displayAmount).minus(totalRefunded))}
             </p>
           </div>
           <ul className="divide-y divide-accent/20 text-xs">
@@ -277,8 +277,12 @@ export default function TransactionDetail({
         )}
         <button
           onClick={handleDelete}
+          disabled={linkedRefunds.length > 0}
+          title={linkedRefunds.length > 0
+            ? `Delete the ${linkedRefunds.length === 1 ? 'refund' : `${linkedRefunds.length} refunds`} first.`
+            : undefined}
           className="flex-1 min-w-[100px] rounded-xl border border-gray-200 py-2.5 text-sm
-                     font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+                     font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
         >
           Delete
         </button>

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import Card from '../common/Card';
 import { useData } from '../../context/DataContext';
 import { formatINR, formatDate } from '../../utils/formatters';
+import { D, ZERO, sum, round2 } from '../../utils/money';
 
 const STATUS_TABS = [
   { value: '', label: 'All' },
@@ -61,9 +62,10 @@ export default function ReceivablesReport() {
     () =>
       filteredReceivables
         .map((r) => {
-          const amount    = r.amount_owed ?? 0;
-          const settled   = r.amount_settled ?? 0;
-          const outstanding = Math.max(0, Math.round((amount - settled) * 100) / 100);
+          const amount    = D(r.amount_owed ?? 0);
+          const settled   = D(r.amount_settled ?? 0);
+          const diff      = amount.minus(settled);
+          const outstanding = diff.lt(0) ? ZERO : round2(diff);
           const days      = agingDays(r.created_at ?? r.date);
           return { ...r, _amount: amount, _settled: settled, _outstanding: outstanding, _days: days };
         })
@@ -75,8 +77,11 @@ export default function ReceivablesReport() {
     [filteredReceivables]
   );
 
-  const totalOwed       = useMemo(() => rows.reduce((s, r) => s + r._amount, 0), [rows]);
-  const totalOutstanding = useMemo(() => rows.filter((r) => r.status !== 'settled' && r.status !== 'paid').reduce((s, r) => s + r._outstanding, 0), [rows]);
+  const totalOwed       = useMemo(() => sum(rows.map((r) => r._amount)), [rows]);
+  const totalOutstanding = useMemo(
+    () => sum(rows.filter((r) => r.status !== 'settled' && r.status !== 'paid').map((r) => r._outstanding)),
+    [rows],
+  );
 
   return (
     <div className="space-y-4">

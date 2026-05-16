@@ -186,17 +186,26 @@ describe('DataContext', () => {
     expect(result.current.categories).toHaveLength(MOCK_ALL_DATA.categories.length + 1);
   });
 
-  it('deletes a category and reloads data', async () => {
+  it('deletes a category surgically and re-parents its children', async () => {
     const { result } = renderHook(() => useData(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const beforeCount = result.current.categories.length;
 
     await act(async () => {
       await result.current.deleteCategory(1);
     });
 
     expect(mockApi.deleteCategory).toHaveBeenCalledWith(1);
-    // Should reload all data to pick up orphaned children
-    expect(mockApi.getAllData).toHaveBeenCalledTimes(2); // initial + reload
+    // No full reload — surgical only
+    expect(mockApi.getAllData).toHaveBeenCalledTimes(1);
+    expect(result.current.categories.find((c) => c.id === 1)).toBeUndefined();
+    expect(result.current.categories).toHaveLength(beforeCount - 1);
+    // Any children of the deleted category should have parent nulled locally
+    for (const c of result.current.categories) {
+      const p = c.parent ?? c.parent_id;
+      expect(p).not.toBe(1);
+    }
   });
 
   // -----------------------------------------------------------------------
@@ -248,9 +257,10 @@ describe('DataContext', () => {
   // Transaction CRUD
   // -----------------------------------------------------------------------
 
-  it('adds a transaction and reloads data', async () => {
+  it('adds a transaction surgically (no full reload)', async () => {
     mockApi.createTransaction.mockResolvedValue({
       id: 10,
+      type: 'expense',
       category: 1,
       entries: [{ id: 1, transaction: 10, account: 1, amount: '100.00' }],
       receivables: [],
@@ -259,24 +269,35 @@ describe('DataContext', () => {
     const { result } = renderHook(() => useData(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
+    const beforeTxns = result.current.transactions.length;
+    const beforeEntries = result.current.entries.length;
+
     await act(async () => {
       await result.current.addTransaction({ amount: 100 });
     });
 
     expect(mockApi.createTransaction).toHaveBeenCalledWith({ amount: 100 });
-    // Should reload all data after adding
-    expect(mockApi.getAllData).toHaveBeenCalledTimes(2); // initial + reload
+    // No full reload — surgical only
+    expect(mockApi.getAllData).toHaveBeenCalledTimes(1);
+    expect(result.current.transactions).toHaveLength(beforeTxns + 1);
+    expect(result.current.entries).toHaveLength(beforeEntries + 1);
+    expect(result.current.transactions.find((t) => t.id === 10)).toBeDefined();
   });
 
-  it('deletes a transaction', async () => {
+  it('deletes a transaction surgically and cascades entries + receivables', async () => {
     const { result } = renderHook(() => useData(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     await act(async () => {
-      await result.current.deleteTransaction(10);
+      await result.current.deleteTransaction(1);
     });
 
-    expect(mockApi.deleteTransaction).toHaveBeenCalledWith(10);
+    expect(mockApi.deleteTransaction).toHaveBeenCalledWith(1);
+    expect(mockApi.getAllData).toHaveBeenCalledTimes(1);
+    expect(result.current.transactions.find((t) => t.id === 1)).toBeUndefined();
+    // Entries and receivables tied to this transaction should be gone too
+    expect(result.current.entries.find((e) => e.transaction_id === 1)).toBeUndefined();
+    expect(result.current.receivables.find((r) => r.transaction_id === 1)).toBeUndefined();
   });
 
   // -----------------------------------------------------------------------

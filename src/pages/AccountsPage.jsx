@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { useAccounts } from '../hooks/useAccounts';
 import { useOwners } from '../hooks/useOwners';
 import { useData } from '../context/DataContext';
+import { formatINR } from '../utils/formatters';
+import { sum, ZERO } from '../utils/money';
 import Card from '../components/common/Card';
 import AmountDisplay from '../components/common/AmountDisplay';
 import EmptyState from '../components/common/EmptyState';
@@ -119,7 +121,7 @@ function AccountLedger({ account, ledger, transactions, onEntryClick }) {
             <p className={`text-[15px] font-semibold tabular-nums shrink-0 ${
               isPositive ? 'text-accent' : 'text-gray-800'
             }`}>
-              {isPositive ? '+' : '-'}₹{entry.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              {isPositive ? '+' : '-'}{formatINR(entry.amount)}
             </p>
           </button>
         );
@@ -256,17 +258,19 @@ export default function AccountsPage() {
     return result;
   }, [accountsByType, ownerFilter]);
 
-  // Pre-compute section totals
+  // Pre-compute section totals. Balances are Decimals — the `+` operator
+  // would silently produce string concatenation (Decimal.valueOf returns a
+  // string), so use the Decimal-aware sum helper.
   const assetTotal = useMemo(
-    () => (filteredByType.asset ?? []).reduce((sum, a) => sum + getAccountBalance(a.id), 0),
+    () => sum((filteredByType.asset ?? []).map((a) => getAccountBalance(a.id) ?? ZERO)),
     [filteredByType, getAccountBalance]
   );
   const liabilityTotal = useMemo(
-    () => (filteredByType.liability ?? []).reduce((sum, a) => sum + getAccountBalance(a.id), 0),
+    () => sum((filteredByType.liability ?? []).map((a) => getAccountBalance(a.id) ?? ZERO)),
     [filteredByType, getAccountBalance]
   );
   const receivableTotal = useMemo(
-    () => (filteredByType.receivable ?? []).reduce((sum, a) => sum + getAccountBalance(a.id), 0),
+    () => sum((filteredByType.receivable ?? []).map((a) => getAccountBalance(a.id) ?? ZERO)),
     [filteredByType, getAccountBalance]
   );
 
@@ -379,7 +383,7 @@ export default function AccountsPage() {
               <div>
                 <p className="text-[11px] text-brand-muted font-medium uppercase tracking-wider">Current Balance</p>
                 <p className="text-2xl font-bold text-white tabular-nums mt-1">
-                  ₹{Math.abs(getAccountBalance(ledgerAccount.id)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatINR(getAccountBalance(ledgerAccount.id).abs())}
                 </p>
               </div>
               <div className="text-right">

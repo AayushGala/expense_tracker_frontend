@@ -1,6 +1,4 @@
-// ---------------------------------------------------------------------------
-// Currency
-// ---------------------------------------------------------------------------
+import { D } from './money';
 
 const inrFormatter = new Intl.NumberFormat('en-IN', {
   style: 'currency',
@@ -9,44 +7,24 @@ const inrFormatter = new Intl.NumberFormat('en-IN', {
   maximumFractionDigits: 2,
 });
 
-/**
- * Formats a number as Indian Rupees using the Indian numbering system.
- * Example: formatINR(125000) → "₹1,25,000.00"
- *
- * @param {number} amount
- * @returns {string}
- */
+// Indian numbering: formatINR(125000) → "₹1,25,000.00".
+// Accepts Decimal, string, or number; coerces for Intl.
 export function formatINR(amount) {
-  return inrFormatter.format(amount);
+  if (amount == null || amount === '') return inrFormatter.format(0);
+  const num = typeof amount === 'number' ? amount : D(amount).toNumber();
+  return inrFormatter.format(num);
 }
-
-// ---------------------------------------------------------------------------
-// Dates
-// ---------------------------------------------------------------------------
 
 const DATE_FORMAT_OPTIONS = { day: '2-digit', month: 'short', year: 'numeric' };
 
-/**
- * Formats a date string into a human-readable form like "19 Mar 2026".
- *
- * @param {string|Date} dateStr - ISO date string or Date object
- * @returns {string}
- */
 export function formatDate(dateStr) {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-GB', DATE_FORMAT_OPTIONS).replace(/\//g, ' ');
 }
 
-/**
- * Returns "Today", "Yesterday", or a formatted date string.
- *
- * @param {string|Date} dateStr - ISO date string or Date object
- * @returns {string}
- */
 export function formatRelativeDate(dateStr) {
-  // Extract the date portion as a plain string to avoid timezone issues.
-  // Date-only strings like "2026-03-21" are parsed as UTC by the Date constructor,
-  // which shifts the day when converted to local time in UTC+ timezones.
+  // Compare via plain YYYY-MM-DD keys so a date-only string isn't reinterpreted
+  // as UTC midnight and shifted a day off in our local timezone.
   const inputKey = String(dateStr).slice(0, 10);
 
   const today = new Date();
@@ -61,32 +39,11 @@ export function formatRelativeDate(dateStr) {
   return formatDate(dateStr);
 }
 
-// ---------------------------------------------------------------------------
-// Amount parsing
-// ---------------------------------------------------------------------------
-
-/**
- * Strips all non-numeric characters except the decimal point and converts
- * the result to a floating-point number.
- *
- * @param {string} str - Raw amount string (e.g. "₹1,25,000.50")
- * @returns {number}
- */
 export function parseAmount(str) {
   const cleaned = String(str).replace(/[^0-9.]/g, '');
-  return parseFloat(cleaned) || 0;
+  return D(cleaned);
 }
 
-// ---------------------------------------------------------------------------
-// Transaction type helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Maps internal transaction type identifiers to human-readable labels.
- *
- * @param {string} type
- * @returns {string}
- */
 export function transactionTypeLabel(type) {
   const labels = {
     expense: 'Expense',
@@ -100,13 +57,6 @@ export function transactionTypeLabel(type) {
   return labels[type] ?? type;
 }
 
-/**
- * Maps internal transaction type identifiers to Tailwind CSS color classes.
- * Returns classes suitable for use as text color on a label or badge.
- *
- * @param {string} type
- * @returns {string}
- */
 export function transactionTypeColor(type) {
   const colors = {
     expense: 'text-red-500',

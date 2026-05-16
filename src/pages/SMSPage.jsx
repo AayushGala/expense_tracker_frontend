@@ -11,6 +11,7 @@ import SMSStatusBadge from '../components/sms/SMSStatusBadge';
 import SMSDetailDrawer from '../components/sms/SMSDetailDrawer';
 import TransactionDetail from '../components/transactions/TransactionDetail';
 import { formatDate, formatINR } from '../utils/formatters';
+import { effectiveSmsStatus } from '../utils/sms';
 
 const STATUS_OPTIONS = [
   { value: 'pending',   label: 'Pending' },
@@ -332,7 +333,7 @@ function SMSRow({ sms, onClick }) {
       <td className="py-3 px-3 text-sm text-gray-700 whitespace-nowrap">{sms.sender}</td>
       <td className="py-3 px-3 text-sm text-gray-600 max-w-md break-words">{bodyPreview(sms.body, 100)}</td>
       <td className="py-3 px-3 text-xs text-gray-500 whitespace-nowrap">{sms.device_identifier || '—'}</td>
-      <td className="py-3 px-3"><SMSStatusBadge status={sms.status} /></td>
+      <td className="py-3 px-3"><SMSStatusBadge status={effectiveSmsStatus(sms)} /></td>
       <td className="py-3 pl-3 pr-5 text-right text-sm font-medium text-gray-700 tabular-nums whitespace-nowrap">
         {sms.parsed_amount ? formatINR(sms.parsed_amount) : '—'}
       </td>
@@ -359,7 +360,7 @@ function SMSCard({ sms, onClick }) {
             <span className="text-[10px] text-gray-400">· {sms.device_identifier}</span>
           )}
         </div>
-        <SMSStatusBadge status={sms.status} />
+        <SMSStatusBadge status={effectiveSmsStatus(sms)} />
       </div>
       <p className="text-xs text-gray-600 break-words">{bodyPreview(sms.body, 140)}</p>
       <div className="flex items-center justify-end">

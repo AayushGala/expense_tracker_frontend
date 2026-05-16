@@ -94,6 +94,21 @@ export default function TransactionDetail({
     category_id, created_at,
   } = transaction;
 
+  // `transaction.amount` is enriched by useTransactions on the TransactionsPage
+  // hook, but callers from other pages (SMS modal, account ledger) pass the raw
+  // transaction row, which has no amount column server-side. Fall back to
+  // computing from the entries (debits == credits for a balanced txn).
+  const displayAmount = useMemo(() => {
+    if (amount != null && amount !== '') return Number(amount);
+    const debits = entries
+      .filter((e) => e.entry_type === 'DEBIT')
+      .reduce((s, e) => s + Number(e.amount || 0), 0);
+    const credits = entries
+      .filter((e) => e.entry_type === 'CREDIT')
+      .reduce((s, e) => s + Number(e.amount || 0), 0);
+    return Math.max(debits, credits);
+  }, [amount, entries]);
+
   // Derive account info from entries since the transaction model doesn't store account IDs
   const accountIds = new Set(accounts.map((a) => a.id));
   const accountEntries = entries.filter((e) => e.account_id != null);
@@ -142,7 +157,7 @@ export default function TransactionDetail({
       <div className="rounded-2xl bg-brand px-5 py-4 flex items-center justify-between">
         <span className="text-[11px] font-medium uppercase tracking-wider text-brand-muted">Amount</span>
         <p className="text-2xl font-bold text-white tabular-nums">
-          {formatINR(amount ?? 0)}
+          {formatINR(displayAmount)}
         </p>
       </div>
 
@@ -154,7 +169,7 @@ export default function TransactionDetail({
               ↩ Refunded · {formatINR(totalRefunded)}
             </p>
             <p className="text-[11px] text-gray-400">
-              Net: {formatINR((amount ?? 0) - totalRefunded)}
+              Net: {formatINR(displayAmount - totalRefunded)}
             </p>
           </div>
           <ul className="divide-y divide-accent/20 text-xs">

@@ -9,6 +9,7 @@ import {
   inputClass, labelClass, errorClass, accountOption, categoryOptions,
 } from '../../utils/formStyles';
 import { formatDate, formatINR } from '../../utils/formatters';
+import { effectiveSmsStatus } from '../../utils/sms';
 
 /**
  * Detail + confirm modal for an SMS. Always shows the original body, the
@@ -17,8 +18,8 @@ import { formatDate, formatINR } from '../../utils/formatters';
  * confirm form appears below for one-click confirmation.
  */
 export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedTransaction }) {
-  const navigate = useNavigate();
   const { accounts, categories, loadData } = useData();
+  const navigate = useNavigate();
 
   const usableAccounts = accounts.filter(
     (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false,
@@ -35,8 +36,10 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
 
   const today = new Date().toISOString().slice(0, 10);
   const initialType = sms?.parsed_direction === 'credit' ? 'income' : 'expense';
-  const isParsed = sms?.status === 'parsed';
-  const isConfirmed = sms?.status === 'confirmed';
+  // Drive UI from the FK (source of truth), not from `status` which can drift
+  // when a linked transaction is deleted.
+  const isLinked = !!sms?.transaction;
+  const canConfirm = !isLinked && sms?.parsed_amount != null;
 
   const [type, setType] = useState(initialType);
   const [amount, setAmount] = useState(sms?.parsed_amount ?? '');
@@ -117,15 +120,19 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
     }
   }
 
-  function handleOpenInForm() {
-    navigate(`/transactions/new?from_sms=${sms.id}`);
-    onClose?.();
-  }
-
   function handleViewLinkedTxn() {
     if (onViewLinkedTransaction) {
       onViewLinkedTransaction(sms.transaction);
     }
+  }
+
+  function handleUseFullForm() {
+    // Escape hatch for transaction types that the inline confirm form can't
+    // express (transfer / bill_payment / investment / refund / split). The
+    // TransactionForm reads `?from_sms` to pre-fill from parsed fields, and
+    // the backend links the SMS on save via the `sms_id` field.
+    onClose?.();
+    navigate(`/transactions/new?from_sms=${sms.id}`);
   }
 
   if (!sms) return null;
@@ -157,7 +164,7 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
             {sms.device_identifier && <> · {sms.device_identifier}</>}
           </p>
         </div>
-        <SMSStatusBadge status={sms.status} />
+        <SMSStatusBadge status={effectiveSmsStatus(sms)} />
       </div>
 
       {/* Original SMS body */}
@@ -205,8 +212,9 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
         </div>
       )}
 
-      {/* Confirm form — only for parsed SMS */}
-      {isParsed && (
+      {/* Confirm form — shown whenever the SMS isn't linked to a transaction
+          and has parsed values we can pre-fill. */}
+      {canConfirm && (
         <>
           <div className="border-t border-gray-100 pt-4">
             <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold mb-3">
@@ -321,16 +329,16 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-4">
-        {isConfirmed && sms.transaction && (
+        {isLinked && (
           <button
             type="button"
             onClick={handleViewLinkedTxn}
             className="flex-1 min-w-[120px] rounded-xl bg-accent-light text-brand py-2.5 text-sm font-semibold hover:bg-accent/30 transition-colors"
           >
-            View linked txn
+            View linked transaction
           </button>
         )}
-        {!isConfirmed && sms.status !== 'ignored' && (
+        {!isLinked && (
           <button
             type="button"
             onClick={handleReparse}
@@ -340,16 +348,16 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
             ↻ Reparse
           </button>
         )}
-        {!isConfirmed && (
+        {!isLinked && (
           <button
             type="button"
-            onClick={handleOpenInForm}
+            onClick={handleUseFullForm}
             className="flex-1 min-w-[120px] rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
           >
-            Open transaction
+            Use full form
           </button>
         )}
-        {isParsed && (
+        {canConfirm && (
           <button
             type="button"
             onClick={handleConfirm}

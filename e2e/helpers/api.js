@@ -94,3 +94,53 @@ export async function deleteAllBackups() {
   // No DELETE endpoint for backups; tests must tolerate pre-existing rows.
   return items;
 }
+
+export async function createExpense({ amount, notes, accountId, categoryId, date = '2026-05-17' }) {
+  const res = await apiFetch('/api/transactions/', {
+    method: 'POST',
+    body: JSON.stringify({
+      type: 'expense', date, amount,
+      from_account_id: accountId, category_id: categoryId, notes,
+    }),
+  });
+  return res.json();
+}
+
+export async function createSplitExpense({
+  totalAmount, myShare, accountId, categoryId, receivableAccountId,
+  receivables, date = '2026-05-17', notes = '',
+}) {
+  const res = await apiFetch('/api/transactions/', {
+    method: 'POST',
+    body: JSON.stringify({
+      type: 'split_expense', date,
+      total_amount: totalAmount, my_share: myShare,
+      from_account_id: accountId, category_id: categoryId,
+      receivable_account_id: receivableAccountId,
+      receivables, notes,
+    }),
+  });
+  return res.json();
+}
+
+export async function createRefund({ sourceId, amount, toAccountId, categoryId, date = '2026-05-17', notes = '' }) {
+  const res = await apiFetch('/api/transactions/', {
+    method: 'POST',
+    body: JSON.stringify({
+      type: 'income', date, amount,
+      to_account_id: toAccountId, category_id: categoryId,
+      source_transaction_id: sourceId, notes,
+    }),
+  });
+  return res.json();
+}
+
+export async function getTransaction(id) {
+  const res = await apiFetch(`/api/transactions/${id}/`);
+  return res.json();
+}
+
+export async function getReceivablesForTransaction(transactionId) {
+  const txn = await getTransaction(transactionId);
+  return txn.receivables ?? [];
+}

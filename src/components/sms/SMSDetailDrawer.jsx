@@ -13,6 +13,21 @@ import { formatDate, formatINR } from '../../utils/formatters';
 import { effectiveSmsStatus } from '../../utils/sms';
 import { D, round2 } from '../../utils/money';
 
+const PREDEFINED_BENEFICIARIES = ['self', 'family'];
+
+function deriveBeneficiaryFields(raw) {
+  // LLM usually parses a merchant name ("Swiggy") which is neither 'self' nor
+  // 'family' — surface that under "custom" with the value pre-filled.
+  const value = (raw ?? '').trim();
+  if (PREDEFINED_BENEFICIARIES.includes(value)) {
+    return { beneficiary_type: value, custom_beneficiary: '' };
+  }
+  if (!value) {
+    return { beneficiary_type: 'self', custom_beneficiary: '' };
+  }
+  return { beneficiary_type: 'custom', custom_beneficiary: value };
+}
+
 function initialStateFromSms(sms) {
   const today = new Date().toISOString().slice(0, 10);
   return {
@@ -22,7 +37,7 @@ function initialStateFromSms(sms) {
       date: sms?.parsed_date ?? today,
       account_id: String(sms?.parsed_account ?? ''),
       category_id: String(sms?.parsed_category ?? ''),
-      beneficiary: sms?.parsed_beneficiary ?? '',
+      ...deriveBeneficiaryFields(sms?.parsed_beneficiary),
       notes: '',
     },
     errors: {},
@@ -125,6 +140,9 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
     if (!values.date) errs.date = 'Date is required.';
     if (!values.account_id) errs.account_id = 'Select an account.';
     if (!values.category_id) errs.category_id = 'Select a category.';
+    if (values.beneficiary_type === 'custom' && !(values.custom_beneficiary ?? '').trim()) {
+      errs.custom_beneficiary = 'Enter a beneficiary name.';
+    }
     return errs;
   }
 
@@ -136,6 +154,9 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
     }
     dispatch({ type: 'SUBMITTING', value: true });
     dispatch({ type: 'SET_ERRORS', errors: {} });
+    const beneficiary = values.beneficiary_type === 'custom'
+      ? values.custom_beneficiary.trim()
+      : values.beneficiary_type;
     try {
       await confirmSMS(sms.id, {
         type: values.type,
@@ -143,7 +164,7 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
         date: values.date,
         from_account_id: parseInt(values.account_id, 10),
         category_id: parseInt(values.category_id, 10),
-        beneficiary: values.beneficiary,
+        beneficiary,
         notes: values.notes,
       });
       toast.success('SMS confirmed as transaction');
@@ -348,12 +369,31 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Beneficiary</label>
-              <input
-                type="text"
-                value={values.beneficiary}
-                onChange={(e) => setField('beneficiary', e.target.value)}
-                className={inputClass}
+              <Select
+                value={values.beneficiary_type}
+                onChange={(e) => setField('beneficiary_type', e.target.value)}
+                options={[
+                  ...PREDEFINED_BENEFICIARIES.map((b) => ({
+                    value: b,
+                    label: b.charAt(0).toUpperCase() + b.slice(1),
+                  })),
+                  { value: 'custom', label: 'Other (custom)' },
+                ]}
               />
+              {values.beneficiary_type === 'custom' && (
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    placeholder="Enter name"
+                    value={values.custom_beneficiary}
+                    onChange={(e) => setField('custom_beneficiary', e.target.value)}
+                    className={inputClass}
+                  />
+                  {errors.custom_beneficiary && (
+                    <p className={errorClass}>{errors.custom_beneficiary}</p>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <label className={labelClass}>Notes</label>

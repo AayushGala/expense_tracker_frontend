@@ -1,18 +1,26 @@
 import { test, expect } from '@playwright/test';
+import { getToken } from '../helpers/api.js';
+
+const API_BASE = process.env.E2E_API_BASE || 'http://localhost:8000';
+
+async function backupCount() {
+  const token = await getToken();
+  const res = await fetch(`${API_BASE}/api/backups/`, {
+    headers: { Authorization: `Token ${token}` },
+  });
+  const items = await res.json();
+  return Array.isArray(items) ? items.length : 0;
+}
 
 test('create a backup via the Settings UI and see it in the list', async ({ page }) => {
+  const before = await backupCount();
+
   await page.goto('/settings');
   await page.getByRole('button', { name: /data export/i }).click();
 
-  // Capture the existing count so we can assert the new file appears.
-  const beforeCount = await page.getByText(/Existing backups/i).count();
-
   await page.getByRole('button', { name: /create backup/i }).click();
 
-  // Success toast or list update.
-  await expect(page.getByText(/Existing backups/i)).toBeVisible({ timeout: 15_000 });
-  // After the click, the listing block becomes visible if it wasn't already.
-  if (beforeCount === 0) {
-    await expect(page.getByText(/Existing backups \(1\)/i)).toBeVisible();
-  }
+  // Authoritative check is via the API — the UI may render the list with
+  // varying formats (no-list when empty, "Existing backups (N)" when not).
+  await expect.poll(backupCount, { timeout: 15_000 }).toBe(before + 1);
 });

@@ -70,11 +70,21 @@ export default function CategoryFilter({ categories, value = [], onChange, filte
     return { sections, childrenMap, allChildIds };
   }, [categories, filterType]);
 
+  // IDs round-trip through the URL as strings while category.id is a number,
+  // so compare everything as strings to avoid silent mismatches (unchecked
+  // boxes + clicks that re-add instead of toggling off).
+  const selected = useMemo(() => new Set((value ?? []).map(String)), [value]);
+  const has = useCallback((id) => selected.has(String(id)), [selected]);
+  const without = (arr, ids) => {
+    const drop = new Set(ids.map(String));
+    return arr.filter((id) => !drop.has(String(id)));
+  };
+
   // Display label
   const displayLabel = useMemo(() => {
     if (value.length === 0) return 'Category';
     if (value.length === 1) {
-      const cat = categories.find((c) => c.id === value[0]);
+      const cat = categories.find((c) => String(c.id) === String(value[0]));
       return cat ? cat.name : '1 selected';
     }
     return `${value.length} categories`;
@@ -83,15 +93,15 @@ export default function CategoryFilter({ categories, value = [], onChange, filte
   // Check states for parents
   function isParentChecked(parentId) {
     const childIds = allChildIds.get(parentId) ?? [];
-    if (childIds.length === 0) return value.includes(parentId);
-    return childIds.every((id) => value.includes(id));
+    if (childIds.length === 0) return has(parentId);
+    return childIds.every((id) => has(id));
   }
 
   function isParentIndeterminate(parentId) {
     const childIds = allChildIds.get(parentId) ?? [];
     if (childIds.length === 0) return false;
-    const someChecked = childIds.some((id) => value.includes(id));
-    const allChecked = childIds.every((id) => value.includes(id));
+    const someChecked = childIds.some((id) => has(id));
+    const allChecked = childIds.every((id) => has(id));
     return someChecked && !allChecked;
   }
 
@@ -99,27 +109,26 @@ export default function CategoryFilter({ categories, value = [], onChange, filte
     const childIds = allChildIds.get(parentId) ?? [];
     if (childIds.length === 0) {
       // Standalone parent (no children) — toggle it directly
-      const next = value.includes(parentId)
-        ? value.filter((id) => id !== parentId)
+      const next = has(parentId)
+        ? without(value, [parentId])
         : [...value, parentId];
       onChange(next);
       return;
     }
 
-    const allChecked = childIds.every((id) => value.includes(id));
+    const allChecked = childIds.every((id) => has(id));
     if (allChecked) {
       // Uncheck all children
-      onChange(value.filter((id) => !childIds.includes(id)));
+      onChange(without(value, childIds));
     } else {
-      // Check all children
-      const newSet = new Set([...value, ...childIds]);
-      onChange([...newSet]);
+      // Check all children (drop any already-present first to avoid dupes)
+      onChange([...without(value, childIds), ...childIds]);
     }
   }
 
   function toggleChild(childId) {
-    const next = value.includes(childId)
-      ? value.filter((id) => id !== childId)
+    const next = has(childId)
+      ? without(value, [childId])
       : [...value, childId];
     onChange(next);
   }
@@ -333,7 +342,7 @@ export default function CategoryFilter({ categories, value = [], onChange, filte
 
                         {/* Children */}
                         {hasChildren && children.map((child) => {
-                          const childChecked = value.includes(child.id);
+                          const childChecked = has(child.id);
                           return (
                             <button
                               key={child.id}

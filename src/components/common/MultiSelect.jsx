@@ -40,10 +40,15 @@ export default function MultiSelect({
     return options.filter((o) => o.label.toLowerCase().includes(searchLower));
   }, [options, search, searchLower]);
 
+  // Values round-trip through the URL as strings while some options (e.g.
+  // account ids) are numbers — compare as strings so checkboxes reflect state.
+  const selected = useMemo(() => new Set((value ?? []).map(String)), [value]);
+  const isSelected = (val) => selected.has(String(val));
+
   const displayLabel = useMemo(() => {
     if (value.length === 0) return placeholder;
     if (value.length === 1) {
-      const opt = options.find((o) => o.value === value[0]);
+      const opt = options.find((o) => String(o.value) === String(value[0]));
       return opt?.label ?? '1 selected';
     }
     if (singularLabel) {
@@ -53,8 +58,8 @@ export default function MultiSelect({
   }, [value, options, placeholder, singularLabel]);
 
   function toggle(val) {
-    if (value.includes(val)) {
-      onChange(value.filter((v) => v !== val));
+    if (isSelected(val)) {
+      onChange(value.filter((v) => String(v) !== String(val)));
     } else {
       onChange([...value, val]);
     }
@@ -176,7 +181,7 @@ export default function MultiSelect({
               <p className="text-sm text-gray-400 text-center py-3">No matches</p>
             ) : (
               filteredOptions.map((opt) => {
-                const checked = value.includes(opt.value);
+                const checked = isSelected(opt.value);
                 return (
                   <button
                     key={String(opt.value)}

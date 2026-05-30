@@ -10,7 +10,7 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v4
         with:
@@ -40,13 +40,13 @@ jobs:
 
     steps:
       # 1. Frontend checkout (this repo) at the workspace root.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # 2. Backend checkout as a sibling. If the backend repo is private,
       #    create a fine-grained PAT with read access and store it as the
       #    BACKEND_REPO_TOKEN secret. For public repos GITHUB_TOKEN works.
       - name: Check out backend
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: AayushGala/expense_tracker
           path: backend
@@ -101,7 +101,7 @@ jobs:
 
       - name: Upload report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: playwright-report
           path: playwright-report/

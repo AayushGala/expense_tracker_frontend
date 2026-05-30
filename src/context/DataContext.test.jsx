@@ -62,7 +62,7 @@ describe('DataContext', () => {
     expect(result.current.accounts[0].type_id).toBe('asset'); // raw FK preserved
     expect(result.current.categories).toEqual(MOCK_ALL_DATA.categories);
     expect(result.current.accountTypes).toEqual(MOCK_ACCOUNT_TYPES);
-    expect(mockApi.getAllData).toHaveBeenCalledTimes(1);
+    expect(mockApi.getBootstrapData).toHaveBeenCalledTimes(1);
     expect(mockApi.getAccountTypes).toHaveBeenCalledTimes(1);
   });
 
@@ -116,8 +116,9 @@ describe('DataContext', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    // Should fall back to empty array, not crash
-    expect(result.current.accountTypes).toEqual([]);
+    // accountTypes still load from the bootstrap payload even though the
+    // dedicated endpoint failed — and the app doesn't crash.
+    expect(result.current.accountTypes).toEqual(MOCK_ACCOUNT_TYPES);
     expect(result.current.accounts).toHaveLength(MOCK_ALL_DATA.accounts.length);
 
     consoleSpy.mockRestore();
@@ -131,7 +132,7 @@ describe('DataContext', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     mockApi = createMockApi({
-      getAllData: vi.fn().mockRejectedValue(new Error('Server down')),
+      getBootstrapData: vi.fn().mockRejectedValue(new Error('Server down')),
     });
 
     const { result } = renderHook(() => useData(), { wrapper });
@@ -198,7 +199,7 @@ describe('DataContext', () => {
 
     expect(mockApi.deleteCategory).toHaveBeenCalledWith(1);
     // No full reload — surgical only
-    expect(mockApi.getAllData).toHaveBeenCalledTimes(1);
+    expect(mockApi.getBootstrapData).toHaveBeenCalledTimes(1);
     expect(result.current.categories.find((c) => c.id === 1)).toBeUndefined();
     expect(result.current.categories).toHaveLength(beforeCount - 1);
     // Any children of the deleted category should have parent nulled locally
@@ -257,47 +258,38 @@ describe('DataContext', () => {
   // Transaction CRUD
   // -----------------------------------------------------------------------
 
-  it('adds a transaction surgically (no full reload)', async () => {
-    mockApi.createTransaction.mockResolvedValue({
-      id: 10,
-      type: 'expense',
-      category: 1,
-      entries: [{ id: 1, transaction: 10, account: 1, amount: '100.00' }],
-      receivables: [],
-    });
+  it('adds a transaction and invalidates (bumps version + refreshes bootstrap)', async () => {
+    mockApi.createTransaction.mockResolvedValue({ id: 10, type: 'expense' });
 
     const { result } = renderHook(() => useData(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    const beforeTxns = result.current.transactions.length;
-    const beforeEntries = result.current.entries.length;
+    const beforeVersion = result.current.dataVersion;
 
     await act(async () => {
       await result.current.addTransaction({ amount: 100 });
     });
 
     expect(mockApi.createTransaction).toHaveBeenCalledWith({ amount: 100 });
-    // No full reload — surgical only
-    expect(mockApi.getAllData).toHaveBeenCalledTimes(1);
-    expect(result.current.transactions).toHaveLength(beforeTxns + 1);
-    expect(result.current.entries).toHaveLength(beforeEntries + 1);
-    expect(result.current.transactions.find((t) => t.id === 10)).toBeDefined();
+    // Transactions are no longer held in memory; the mutation bumps dataVersion
+    // (so server-backed hooks refetch) and reloads the bootstrap data.
+    expect(result.current.dataVersion).toBe(beforeVersion + 1);
+    expect(mockApi.getBootstrapData).toHaveBeenCalledTimes(2);
   });
 
-  it('deletes a transaction surgically and cascades entries + receivables', async () => {
+  it('deletes a transaction and invalidates', async () => {
     const { result } = renderHook(() => useData(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const beforeVersion = result.current.dataVersion;
 
     await act(async () => {
       await result.current.deleteTransaction(1);
     });
 
     expect(mockApi.deleteTransaction).toHaveBeenCalledWith(1);
-    expect(mockApi.getAllData).toHaveBeenCalledTimes(1);
-    expect(result.current.transactions.find((t) => t.id === 1)).toBeUndefined();
-    // Entries and receivables tied to this transaction should be gone too
-    expect(result.current.entries.find((e) => e.transaction_id === 1)).toBeUndefined();
-    expect(result.current.receivables.find((r) => r.transaction_id === 1)).toBeUndefined();
+    expect(result.current.dataVersion).toBe(beforeVersion + 1);
+    expect(mockApi.getBootstrapData).toHaveBeenCalledTimes(2);
   });
 
   // -----------------------------------------------------------------------

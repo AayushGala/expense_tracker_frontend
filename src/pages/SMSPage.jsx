@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../api/client';
-import { useData } from '../context/DataContext';
 import { useUrlFilters } from '../hooks/useUrlFilters';
 import Card from '../components/common/Card';
 import Modal from '../components/common/Modal';
@@ -47,7 +46,8 @@ function bodyPreview(body, max = 80) {
 }
 
 export default function SMSPage() {
-  const { transactions, entries } = useData();
+  // SMSPage no longer reads the global transactions/entries arrays; the linked
+  // transaction modal self-fetches by id.
 
   const [smsMessages, setSmsMessages] = useState([]);
   const [devices, setDevices] = useState([]);
@@ -297,10 +297,10 @@ export default function SMSPage() {
             onClose={() => setSelectedSms(null)}
             onSuccess={() => { setSelectedSms(null); fetchSms(); }}
             onViewLinkedTransaction={(txnId) => {
-              const txn = transactions.find((t) => t.id === txnId);
-              if (txn) {
+              if (txnId) {
                 setSelectedSms(null);
-                setSelectedTxn(txn);
+                // TransactionDetail self-fetches the full record from this seed.
+                setSelectedTxn({ id: txnId });
               }
             }}
           />
@@ -317,7 +317,6 @@ export default function SMSPage() {
         {selectedTxn && (
           <TransactionDetail
             transaction={selectedTxn}
-            entries={entries.filter((e) => e.transaction_id === selectedTxn.id)}
             onClose={() => setSelectedTxn(null)}
             onDeleted={() => { setSelectedTxn(null); fetchSms(); }}
             onSelectTransaction={setSelectedTxn}

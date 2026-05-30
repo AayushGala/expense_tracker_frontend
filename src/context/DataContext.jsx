@@ -1,26 +1,27 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import api from '../api/client';
 import { D } from '../utils/money';
+import { readCachedData, writeCachedData } from '../utils/dataCache';
 
 const initialState = {
   accounts: [],
   categories: [],
-  transactions: [],
-  entries: [],
+  // transactions/entries are no longer held in memory — they're server-paginated
+  // and aggregated. budgets are lazy-loaded where needed.
   receivables: [],
-  budgets: [],
   accountTypes: [],
   settings: {},
   isLoading: true,
   error: null,
+  // Bumped after every transaction mutation so server-backed hooks (list,
+  // balances, reports, summary) refetch.
+  dataVersion: 0,
 };
 
 const SET_DATA            = 'SET_DATA';
 const SET_LOADING         = 'SET_LOADING';
 const SET_ERROR           = 'SET_ERROR';
-const ADD_TRANSACTION     = 'ADD_TRANSACTION';
-const UPDATE_TRANSACTION  = 'UPDATE_TRANSACTION';
-const DELETE_TRANSACTION  = 'DELETE_TRANSACTION';
+const BUMP_VERSION        = 'BUMP_VERSION';
 const ADD_ACCOUNT         = 'ADD_ACCOUNT';
 const UPDATE_ACCOUNT      = 'UPDATE_ACCOUNT';
 const DELETE_ACCOUNT      = 'DELETE_ACCOUNT';
@@ -56,48 +57,8 @@ function dataReducer(state, action) {
     case SET_ERROR:
       return { ...state, error: action.payload, isLoading: false };
 
-    // --- Transactions ---
-
-    case ADD_TRANSACTION: {
-      const { transaction, entries, receivables = [] } = action.payload;
-      return {
-        ...state,
-        transactions: [...state.transactions, transaction],
-        entries: [...state.entries, ...entries],
-        receivables: [...state.receivables, ...receivables],
-      };
-    }
-
-    case UPDATE_TRANSACTION: {
-      const { id, transaction, newEntries, newReceivables } = action.payload;
-      const transactions = state.transactions.map((t) =>
-        t.id === id ? { ...t, ...transaction } : t
-      );
-      const entriesWithoutOld = state.entries.filter((e) => e.transaction_id !== id);
-      // Split-expense edits replace the receivables. For other types,
-      // newReceivables is undefined and we leave them untouched.
-      const receivables = newReceivables !== undefined
-        ? [...state.receivables.filter((r) => r.transaction_id !== id), ...newReceivables]
-        : state.receivables;
-      return {
-        ...state,
-        transactions,
-        entries: [...entriesWithoutOld, ...newEntries],
-        receivables,
-      };
-    }
-
-    case DELETE_TRANSACTION: {
-      const { id } = action.payload;
-      return {
-        ...state,
-        transactions: state.transactions.filter((t) => t.id !== id),
-        entries: state.entries.filter((e) => e.transaction_id !== id),
-        // Cascade: split-expense receivables and refund chains hang off the
-        // transaction, so they should disappear with it locally too.
-        receivables: state.receivables.filter((r) => r.transaction_id !== id),
-      };
-    }
+    case BUMP_VERSION:
+      return { ...state, dataVersion: state.dataVersion + 1 };
 
     // --- Accounts ---
 
@@ -190,36 +151,12 @@ function dataReducer(state, action) {
 // and are converted to Decimal at this boundary so downstream arithmetic
 // doesn't suffer float drift.
 
-function transformEntry(e) {
-  return {
-    ...e,
-    transaction_id: e.transaction,
-    account_id: e.account,
-    category_id: e.category,
-    amount: D(e.amount),
-  };
-}
-
-function transformTransaction(t) {
-  return {
-    ...t,
-    category_id: t.category,
-  };
-}
-
 function transformReceivable(r) {
   return {
     ...r,
     transaction_id: r.transaction,
     amount_owed: D(r.amount_owed),
     amount_settled: D(r.amount_settled),
-  };
-}
-
-function transformBudget(b) {
-  return {
-    ...b,
-    amount: D(b.amount),
   };
 }
 
@@ -243,100 +180,87 @@ export function DataProvider({ children }) {
 
   const initialLoadDone = useRef(false);
 
+  // Turns a RAW /api/data/all/ payload (strings, no Decimals) into reducer
+  // state. Shared by the network path and the IndexedDB rehydrate path so both
+  // go through the exact same transforms.
+  const applyRawData = useCallback((data) => {
+    const accountTypes = data.account_types ?? [];
+    const typeNameMap = new Map();
+    const subTypeNameMap = new Map();
+    for (const at of accountTypes) {
+      typeNameMap.set(at.id, at.name);
+      for (const st of (at.sub_types ?? [])) {
+        subTypeNameMap.set(st.id, st.name);
+      }
+    }
+
+    const atList = Array.isArray(accountTypes) ? accountTypes : (accountTypes.results ?? []);
+    // Only set when present so we don't clobber the dedicated loadAccountTypes()
+    // fetch when the bootstrap payload omits account_types.
+    if (atList.length > 0) {
+      dispatch({ type: SET_ACCOUNT_TYPES, payload: atList });
+    }
+
+    dispatch({
+      type: SET_DATA,
+      payload: {
+        accounts: (data.accounts ?? []).map((a) => transformAccount(a, typeNameMap, subTypeNameMap)),
+        categories: data.categories ?? [],
+        receivables: (data.receivables ?? []).map(transformReceivable),
+        settings: data.settings ?? {},
+      },
+    });
+  }, []);
+
   const loadData = useCallback(async () => {
     // Only block the UI on the very first load; refetches stay silent.
     if (!initialLoadDone.current) {
       dispatch({ type: SET_LOADING, payload: true });
     }
     try {
-      const data = await api.getAllData();
-
-      const accountTypes = data.account_types ?? [];
-      const typeNameMap = new Map();
-      const subTypeNameMap = new Map();
-      for (const at of accountTypes) {
-        typeNameMap.set(at.id, at.name);
-        for (const st of (at.sub_types ?? [])) {
-          subTypeNameMap.set(st.id, st.name);
-        }
-      }
-
-      const atList = Array.isArray(accountTypes) ? accountTypes : (accountTypes.results ?? []);
-      dispatch({ type: SET_ACCOUNT_TYPES, payload: atList });
-
-      dispatch({
-        type: SET_DATA,
-        payload: {
-          accounts: (data.accounts ?? []).map((a) => transformAccount(a, typeNameMap, subTypeNameMap)),
-          categories: data.categories ?? [],
-          transactions: (data.transactions ?? []).map(transformTransaction),
-          entries: (data.entries ?? []).map(transformEntry),
-          receivables: (data.receivables ?? []).map(transformReceivable),
-          budgets: (data.budgets ?? []).map(transformBudget),
-          settings: data.settings ?? {},
-        },
-      });
+      const data = await api.getBootstrapData();
+      applyRawData(data);        // transforms (strings -> Decimal) happen here
+      writeCachedData(data);     // cache the (now small) payload for instant rehydrate
       initialLoadDone.current = true;
     } catch (err) {
       console.error('DataContext: loadData failed', err);
       dispatch({ type: SET_ERROR, payload: err.message ?? String(err) });
     }
-  }, []);
+  }, [applyRawData]);
 
 
-  // Transaction mutations dispatch surgically against the local reducer
-  // (TransactionDetailSerializer returns entries + receivables inline so we
-  // never need a follow-up /api/data/all/ refetch).
+  // After any transaction mutation, bump dataVersion (so the server-backed
+  // list/balances/reports/summary refetch) and reload the bootstrap data (so
+  // the in-context receivables reflect split/reimbursement changes).
+  const invalidate = useCallback(() => {
+    dispatch({ type: BUMP_VERSION });
+    loadData();
+  }, [loadData]);
 
   const addTransaction = useCallback(async (transactionData) => {
     const result = await api.createTransaction(transactionData);
-    dispatch({
-      type: ADD_TRANSACTION,
-      payload: {
-        transaction: transformTransaction(result),
-        entries: (result.entries ?? []).map(transformEntry),
-        receivables: (result.receivables ?? []).map(transformReceivable),
-      },
-    });
+    invalidate();
     return result;
-  }, []);
+  }, [invalidate]);
 
   const updateTransaction = useCallback(async (id, transactionData) => {
     const result = await api.updateTransaction(id, transactionData);
-    dispatch({
-      type: UPDATE_TRANSACTION,
-      payload: {
-        id,
-        transaction: transformTransaction(result),
-        newEntries: (result.entries ?? []).map(transformEntry),
-        // Always replace receivables — backend returns the canonical set
-        // (empty list for non-split types).
-        newReceivables: (result.receivables ?? []).map(transformReceivable),
-      },
-    });
+    invalidate();
     return result;
-  }, []);
+  }, [invalidate]);
 
   const deleteTransaction = useCallback(async (id) => {
     await api.deleteTransaction(id);
-    dispatch({ type: DELETE_TRANSACTION, payload: { id } });
-  }, []);
+    invalidate();
+  }, [invalidate]);
 
-  // Confirms an SMS server-side (creates a transaction, links the SMS to
-  // it) and dispatches the new transaction surgically. SMSPage handles its
-  // own list refresh via the onSuccess callback.
+  // Confirms an SMS server-side (creates a transaction, links the SMS to it).
+  // SMSPage handles its own list refresh via the onSuccess callback.
   const confirmSMS = useCallback(async (smsId, payload) => {
     const result = await api.confirmSMS(smsId, payload);
-    dispatch({
-      type: ADD_TRANSACTION,
-      payload: {
-        transaction: transformTransaction(result),
-        entries: (result.entries ?? []).map(transformEntry),
-        receivables: (result.receivables ?? []).map(transformReceivable),
-      },
-    });
+    invalidate();
     return result;
-  }, []);
+  }, [invalidate]);
 
   const { typeNameMap, subTypeNameMap } = useMemo(() => {
     const tMap = new Map();
@@ -434,11 +358,24 @@ export function DataProvider({ children }) {
     await loadAccountTypes();
   }, [loadAccountTypes]);
 
-  // Auto-load data on mount
+  // Mount: rehydrate from the IndexedDB cache first so a discarded-tab reload
+  // paints the last-seen data immediately (no spinner, no blocking network),
+  // then revalidate over the network in the background. Stale-while-revalidate.
   useEffect(() => {
-    loadData();
-    loadAccountTypes();
-  }, [loadData, loadAccountTypes]);
+    let cancelled = false;
+    (async () => {
+      const cached = await readCachedData();
+      if (!cancelled && cached && !initialLoadDone.current) {
+        applyRawData(cached);            // isLoading -> false immediately
+        initialLoadDone.current = true;  // makes the background loadData() silent
+      }
+      if (!cancelled) {
+        loadData();          // background revalidate of the bulk payload
+        loadAccountTypes();  // standalone account-types endpoint (its own shape)
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [loadData, loadAccountTypes, applyRawData]);
 
   // ---------------------------------------------------------------------------
   // Settings

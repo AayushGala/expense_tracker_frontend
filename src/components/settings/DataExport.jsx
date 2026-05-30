@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react';
 import Card from '../common/Card';
-import { useData } from '../../context/DataContext';
 import api from '../../api/client';
-import {
-  transactionsToCSV,
-  downloadBlob,
-  csvTimestamp,
-} from '../../utils/transactionCsv';
+import { downloadBlob, csvTimestamp } from '../../utils/transactionCsv';
 
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -15,21 +10,12 @@ function formatSize(bytes) {
 }
 
 export default function DataExport() {
-  const {
-    accounts,
-    categories,
-    transactions,
-    entries,
-    receivables,
-    budgets,
-    settings,
-  } = useData();
-
   // --- Backup state ---
   const [backups, setBackups] = useState([]);
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupMessage, setBackupMessage] = useState(null);
   const [backupError, setBackupError] = useState(null);
+  const [exportBusy, setExportBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,26 +56,32 @@ export default function DataExport() {
     }
   }
 
-  function handleExportJSON() {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      accounts,
-      categories,
-      transactions,
-      entries,
-      receivables,
-      budgets,
-      settings,
-    };
-    const json = JSON.stringify(payload, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    downloadBlob(blob, `expense-tracker-export-${csvTimestamp()}.json`);
+  // Full export pulls the complete dataset on demand (it's the one place a
+  // full dump is wanted) rather than keeping it all in memory for the session.
+  async function handleExportJSON() {
+    setExportBusy(true);
+    try {
+      const data = await api.getAllData();
+      const payload = { exportedAt: new Date().toISOString(), ...data };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      downloadBlob(blob, `expense-tracker-export-${csvTimestamp()}.json`);
+    } catch (err) {
+      setBackupError(err.message);
+    } finally {
+      setExportBusy(false);
+    }
   }
 
-  function handleExportCSV() {
-    const csv = transactionsToCSV(transactions);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    downloadBlob(blob, `transactions-${csvTimestamp()}.csv`);
+  async function handleExportCSV() {
+    setExportBusy(true);
+    try {
+      const blob = await api.getTransactionsCSV();
+      downloadBlob(blob, `transactions-${csvTimestamp()}.csv`);
+    } catch (err) {
+      setBackupError(err.message);
+    } finally {
+      setExportBusy(false);
+    }
   }
 
   const btnClass =
@@ -170,11 +162,11 @@ export default function DataExport() {
                 All data: accounts, categories, transactions, entries, receivables, budgets and settings.
               </p>
             </div>
-            <button onClick={handleExportJSON} className={btnClass}>
+            <button onClick={handleExportJSON} disabled={exportBusy} className={btnClass}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
               </svg>
-              Export JSON
+              {exportBusy ? 'Exporting…' : 'Export JSON'}
             </button>
           </div>
 
@@ -186,16 +178,13 @@ export default function DataExport() {
               <p className="text-[13px] font-medium text-gray-700">Transactions (CSV)</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 Transactions only — compatible with spreadsheet apps.
-                {transactions.length > 0 && (
-                  <> Includes {transactions.length} transaction{transactions.length !== 1 ? 's' : ''}.</>
-                )}
               </p>
             </div>
-            <button onClick={handleExportCSV} className={btnClass}>
+            <button onClick={handleExportCSV} disabled={exportBusy} className={btnClass}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
               </svg>
-              Export CSV
+              {exportBusy ? 'Exporting…' : 'Export CSV'}
             </button>
           </div>
         </div>

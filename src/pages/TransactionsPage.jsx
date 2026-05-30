@@ -1,13 +1,16 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useUrlFilters } from '../hooks/useUrlFilters';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTransactions } from '../hooks/useTransactions';
 import { useTransactionSummary } from '../hooks/useTransactionSummary';
-import { useData } from '../context/DataContext';
+import api from '../api/client';
+import { buildTransactionParams } from '../utils/transactionParams';
+import { useToast } from '../context/ToastContext';
 import FilterBar from '../components/common/FilterBar';
 import Badge from '../components/common/Badge';
 import AmountDisplay from '../components/common/AmountDisplay';
 import EmptyState from '../components/common/EmptyState';
+import LoadingSpinner from '../components/common/LoadingSpinner';
 import Modal from '../components/common/Modal';
 import Card from '../components/common/Card';
 import TransactionDetail from '../components/transactions/TransactionDetail';
@@ -15,26 +18,8 @@ import TransactionSummary from '../components/transactions/TransactionSummary';
 import SavedViews from '../components/transactions/SavedViews';
 import { formatDate, transactionTypeLabel } from '../utils/formatters';
 import { getThisMonthRange } from '../utils/datePresets';
-import { downloadTransactionsCSV } from '../utils/transactionCsv';
+import { downloadBlob, csvTimestamp } from '../utils/transactionCsv';
 import TypeIcon, { getVariant } from '../components/common/TypeIcon';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function toDateKey(isoDate) {
-  return isoDate?.slice(0, 10) ?? '';
-}
-
-function groupByDate(transactions) {
-  const groups = new Map();
-  for (const txn of transactions) {
-    const key = toDateKey(txn.date);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(txn);
-  }
-  return groups;
-}
 
 // ---------------------------------------------------------------------------
 // Sort header button (desktop table)
@@ -274,44 +259,46 @@ const FILTER_SCHEMA = {
 
 export default function TransactionsPage() {
   const navigate = useNavigate();
-  const { isLoading, deleteTransaction } = useData();
+  const toast = useToast();
 
   // URL-backed so reload/share/bookmark preserves the filter view.
   const [filters, setFilters] = useUrlFilters(FILTER_SCHEMA, getDefaultFilters());
+  // Page is its own URL param so reload/share preserves the page too. Changing
+  // any filter rebuilds the URL from FILTER_SCHEMA (which omits `page`), so the
+  // page naturally resets to 1 — no manual reset needed for filter changes.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentPage = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1);
+  const setCurrentPage = useCallback((page) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (page <= 1) next.delete('page');
+      else next.set('page', String(page));
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
   const [selectedTxn, setSelectedTxn] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [splitMode, setSplitMode] = useState('my_share');
-  // Multi-column sort: first click adds the column as a tiebreaker at the end
-  // of the chain, so already-sorted columns keep their priority. Default: empty
-  // chain — the data comes pre-sorted by date desc from useTransactions.
+  const [csvBusy, setCsvBusy] = useState(false);
+  // Multi-column sort chain (local UI state). Maps to DRF ?ordering=.
   const [sortChain, setSortChain] = useState([]);
 
-  const { filteredTransactions, getTransactionEntries } = useTransactions(filters);
+  const ordering = useMemo(() => {
+    if (sortChain.length === 0) return undefined; // backend default: -date,-created_at
+    return sortChain.map(({ key, dir }) => (dir === 'desc' ? `-${key}` : key)).join(',');
+  }, [sortChain]);
+
+  const { transactions, count, isLoading: listLoading } = useTransactions(filters, {
+    page: currentPage,
+    ordering,
+    pageSize: PAGE_SIZE,
+  });
   const { summary, isLoading: summaryLoading } = useTransactionSummary(filters, splitMode);
 
-  const sortedTransactions = useMemo(() => {
-    const arr = [...filteredTransactions];
-    arr.sort((a, b) => {
-      for (const { key, dir } of sortChain) {
-        let cmp;
-        if (key === 'amount') {
-          cmp = (a.amount ?? 0) - (b.amount ?? 0);
-        } else {
-          cmp = new Date(a.date) - new Date(b.date);
-        }
-        if (cmp !== 0) return dir === 'asc' ? cmp : -cmp;
-      }
-      return 0;
-    });
-    return arr;
-  }, [filteredTransactions, sortChain]);
+  const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
   /**
-   * Click cycle for each column: asc → desc → remove.
-   * - Not in chain → append as asc (lowest-priority tiebreaker).
-   * - In chain as asc → flip to desc (priority unchanged).
-   * - In chain as desc → remove from chain.
-   * This keeps earlier sorts intact; a new column joins as a tiebreaker.
+   * Click cycle for each column: asc → desc → remove. Resets to page 1.
    */
   function handleSort(key) {
     setSortChain((chain) => {
@@ -325,26 +312,31 @@ export default function TransactionsPage() {
     setCurrentPage(1);
   }
 
-  const totalPages = Math.ceil(sortedTransactions.length / PAGE_SIZE);
-  const paginatedTxns = sortedTransactions.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  );
-
+  // Filter changes rebuild the URL from schema (drops `page`), resetting to 1.
   const handleFilterChange = useCallback((key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-    setCurrentPage(1);
-  }, []);
+  }, [setFilters]);
 
   const handleBulkFilterChange = useCallback((partial) => {
     setFilters((prev) => ({ ...prev, ...partial }));
-    setCurrentPage(1);
-  }, []);
+  }, [setFilters]);
 
   const handleReset = useCallback(() => {
     setFilters(EMPTY_FILTERS);
-    setCurrentPage(1);
-  }, []);
+  }, [setFilters]);
+
+  const handleDownloadCsv = useCallback(async () => {
+    setCsvBusy(true);
+    try {
+      const params = buildTransactionParams(filters, ordering ? { ordering } : {});
+      const blob = await api.getTransactionsCSV(params);
+      downloadBlob(blob, `transactions-${csvTimestamp()}.csv`);
+    } catch {
+      toast.error('Failed to export CSV.');
+    } finally {
+      setCsvBusy(false);
+    }
+  }, [filters, ordering, toast]);
 
   function handleRowClick(txn) {
     setSelectedTxn(txn);
@@ -353,8 +345,6 @@ export default function TransactionsPage() {
   function handleModalClose() {
     setSelectedTxn(null);
   }
-
-  if (isLoading) return null; // DataGate handles the loading screen
 
   return (
     <div className="space-y-6">
@@ -394,7 +384,13 @@ export default function TransactionsPage() {
       </Card>
 
       {/* Content */}
-      {paginatedTxns.length === 0 ? (
+      {listLoading && transactions.length === 0 ? (
+        <Card className="p-0 overflow-hidden">
+          <div className="py-16 flex items-center justify-center">
+            <LoadingSpinner size="h-8 w-8" />
+          </div>
+        </Card>
+      ) : transactions.length === 0 ? (
         <EmptyState
           message="No transactions found"
           description="Try adjusting your filters or add a new transaction."
@@ -413,13 +409,14 @@ export default function TransactionsPage() {
             <h2 className="text-sm font-bold text-gray-900">Recent Activity</h2>
             <div className="flex items-center gap-3">
               <p className="text-xs text-gray-400">
-                {paginatedTxns.length} of {filteredTransactions.length}
+                {transactions.length} of {count}
               </p>
               <button
                 type="button"
-                onClick={() => downloadTransactionsCSV(sortedTransactions)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
-                title={`Download ${sortedTransactions.length} filtered transactions as CSV`}
+                onClick={handleDownloadCsv}
+                disabled={csvBusy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 transition-colors"
+                title={`Download ${count} filtered transactions as CSV`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
@@ -431,7 +428,7 @@ export default function TransactionsPage() {
 
           {/* Mobile card list */}
           <div className="md:hidden divide-y divide-gray-50">
-            {paginatedTxns.map((txn) => (
+            {transactions.map((txn) => (
               <TransactionCard
                 key={txn.id}
                 txn={txn}
@@ -468,7 +465,7 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {paginatedTxns.map((txn) => (
+                {transactions.map((txn) => (
                   <TransactionRow
                     key={txn.id}
                     txn={txn}
@@ -500,7 +497,6 @@ export default function TransactionsPage() {
         {selectedTxn && (
           <TransactionDetail
             transaction={selectedTxn}
-            entries={getTransactionEntries(selectedTxn.id)}
             onClose={handleModalClose}
             onDeleted={() => { setSelectedTxn(null); }}
             onSelectTransaction={setSelectedTxn}

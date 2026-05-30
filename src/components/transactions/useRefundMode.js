@@ -1,19 +1,20 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useData } from '../../context/DataContext';
+import { useApiResource } from '../../hooks/useApiResource';
+import api from '../../api/client';
 
 /**
  * Refund is a category-driven subtype of income — picking a category with
  * role='refund' flips the form into refund mode. Amount, account, owner,
  * beneficiary, platform, tags are inherited from the source so filters by
  * beneficiary/tags continue to match the refund alongside the original.
+ *
+ * The source transaction is fetched on demand (it no longer lives in memory).
  */
 export function useRefundMode(values, dispatch) {
-  const { categories, transactions, entries } = useData();
+  const { categories } = useData();
 
-  const refundCategory = useMemo(
-    () => categories.find((c) => c.role === 'refund'),
-    [categories],
-  );
+  const refundCategory = categories.find((c) => c.role === 'refund');
   const refundCategoryId = refundCategory ? String(refundCategory.id) : null;
   const isRefundMode = refundCategoryId !== null && values.category_id === refundCategoryId;
 
@@ -21,25 +22,14 @@ export function useRefundMode(values, dispatch) {
     dispatch({ type: 'SET_FIELD', name, value });
   }
 
-  const entriesByTxn = useMemo(() => {
-    const map = new Map();
-    for (const e of entries) {
-      if (!map.has(e.transaction_id)) map.set(e.transaction_id, []);
-      map.get(e.transaction_id).push(e);
-    }
-    return map;
-  }, [entries]);
+  const srcId = values.source_transaction_id || null;
+  const { data: sourceTxn } = useApiResource(
+    () => api.getTransaction(srcId),
+    [srcId],
+    { skip: !srcId },
+  );
 
-  const sourceTxn = useMemo(() => {
-    if (!values.source_transaction_id) return null;
-    return transactions.find((t) => t.id === values.source_transaction_id) ?? null;
-  }, [transactions, values.source_transaction_id]);
-
-  const sourceCategoryName = useMemo(() => {
-    if (!sourceTxn) return '';
-    const cat = categories.find((c) => c.id === sourceTxn.category_id);
-    return cat?.name ?? '';
-  }, [sourceTxn, categories]);
+  const sourceCategoryName = sourceTxn?.category_name ?? '';
 
   // Avoid submitting a non-refund income with a stale source FK.
   useEffect(() => {
@@ -49,7 +39,7 @@ export function useRefundMode(values, dispatch) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRefundMode]);
 
-  function handleSourceChange(id) {
+  async function handleSourceChange(id) {
     setField('source_transaction_id', id);
     if (!id) {
       setField('amount', '');
@@ -59,18 +49,21 @@ export function useRefundMode(values, dispatch) {
       setField('tags', '');
       return;
     }
-    const sourceTxnPicked = transactions.find((t) => t.id === id);
-    const creditEntry = (entriesByTxn.get(id) ?? [])
-      .find((e) => e.entry_type === 'CREDIT' && e.account_id);
-    if (creditEntry) {
-      setField('amount', String(creditEntry.amount));
-      setField('to_account_id', String(creditEntry.account_id));
-    }
-    if (sourceTxnPicked) {
-      if (sourceTxnPicked.owner) setField('owner', sourceTxnPicked.owner);
-      setField('beneficiary', sourceTxnPicked.beneficiary ?? '');
-      setField('platform', sourceTxnPicked.platform ?? '');
-      setField('tags', sourceTxnPicked.tags ?? '');
+    try {
+      const detail = await api.getTransaction(id);
+      // The CREDIT account entry is what left the account in the original expense.
+      const creditEntry = (detail.entries ?? [])
+        .find((e) => e.entry_type === 'CREDIT' && e.account);
+      if (creditEntry) {
+        setField('amount', String(creditEntry.amount));
+        setField('to_account_id', String(creditEntry.account));
+      }
+      if (detail.owner) setField('owner', detail.owner);
+      setField('beneficiary', detail.beneficiary ?? '');
+      setField('platform', detail.platform ?? '');
+      setField('tags', detail.tags ?? '');
+    } catch {
+      /* leave fields as-is on fetch failure */
     }
   }
 

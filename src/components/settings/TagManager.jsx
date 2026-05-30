@@ -1,35 +1,20 @@
 import { useMemo } from 'react';
 import Card from '../common/Card';
+import api from '../../api/client';
+import { useApiResource } from '../../hooks/useApiResource';
 import { useData } from '../../context/DataContext';
 
 export default function TagManager() {
-  const { transactions } = useData();
+  // Tags + usage counts are derived server-side from the transactions table.
+  const { dataVersion } = useData();
+  const { data } = useApiResource(() => api.getTagCounts(), [dataVersion ?? 0]);
 
-  const tags = useMemo(() => {
-    const set = new Set();
-    for (const txn of transactions) {
-      if (!txn.tags) continue;
-      const parts = String(txn.tags)
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean);
-      parts.forEach((p) => set.add(p));
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [transactions]);
-
-  const tagCounts = useMemo(() => {
-    const counts = new Map();
-    for (const txn of transactions) {
-      if (!txn.tags) continue;
-      const parts = String(txn.tags)
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean);
-      parts.forEach((p) => counts.set(p, (counts.get(p) ?? 0) + 1));
-    }
-    return counts;
-  }, [transactions]);
+  const tagRows = data ?? [];
+  const tags = useMemo(() => tagRows.map((r) => r.tag), [tagRows]);
+  const tagCounts = useMemo(
+    () => new Map(tagRows.map((r) => [r.tag, r.count])),
+    [tagRows],
+  );
 
   return (
     <div className="space-y-6">

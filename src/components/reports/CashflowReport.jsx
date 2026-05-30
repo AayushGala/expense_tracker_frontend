@@ -11,9 +11,9 @@ import {
 } from 'recharts';
 import Card from '../common/Card';
 import MultiSelect from '../common/MultiSelect';
-import { useReports } from '../../hooks/useReports';
+import LoadingSpinner from '../common/LoadingSpinner';
+import { useCashflow, useBeneficiaries } from '../../hooks/useReportData';
 import { useOwners } from '../../hooks/useOwners';
-import { useData } from '../../context/DataContext';
 import { formatINR } from '../../utils/formatters';
 
 function shortMonth(monthKey) {
@@ -37,9 +37,8 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function CashflowReport() {
-  const { cashflow } = useReports();
   const { owners, ownerOptions } = useOwners();
-  const { transactions } = useData();
+  const beneficiaryOptions = useBeneficiaries();
 
   const [selectedOwners, setSelectedOwners] = useState([]);
   const [selectedBeneficiaries, setSelectedBeneficiaries] = useState([]);
@@ -49,18 +48,15 @@ export default function CashflowReport() {
     [ownerOptions]
   );
 
-  const beneficiaryOptions = useMemo(() => {
-    const set = new Set(transactions.map((t) => t.beneficiary).filter(Boolean));
-    return [...set].sort((a, b) => a.localeCompare(b)).map((b) => ({ value: b, label: b }));
-  }, [transactions]);
+  const filters = useMemo(
+    () => ({ owners: selectedOwners, beneficiaries: selectedBeneficiaries }),
+    [selectedOwners, selectedBeneficiaries]
+  );
+  const { data: cashflowData, isLoading } = useCashflow(filters, 12);
 
   const data = useMemo(
-    () =>
-      cashflow(12, selectedOwners, selectedBeneficiaries).map((d) => ({
-        ...d,
-        label: shortMonth(d.month),
-      })),
-    [cashflow, selectedOwners, selectedBeneficiaries]
+    () => cashflowData.map((d) => ({ ...d, label: shortMonth(d.month) })),
+    [cashflowData]
   );
 
   const totals = useMemo(
@@ -123,6 +119,11 @@ export default function CashflowReport() {
 
       {/* Chart */}
       <Card className="p-5">
+        {isLoading ? (
+          <div className="h-[320px] flex items-center justify-center">
+            <LoadingSpinner size="h-8 w-8" />
+          </div>
+        ) : (
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={data} margin={{ top: 10, right: 20, left: 10, bottom: 0 }} barCategoryGap="30%">
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -146,6 +147,7 @@ export default function CashflowReport() {
             <Bar dataKey="investments" name="Investments" fill="#7c9a9e" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+        )}
       </Card>
     </div>
   );

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Card from '../common/Card';
 import Dropdown from '../common/Dropdown';
 import { useData } from '../../context/DataContext';
+import { useAccounts } from '../../hooks/useAccounts';
 import { useOwners } from '../../hooks/useOwners';
 
 const inputClass =
@@ -181,7 +182,8 @@ function AccountGroupCard({ typeLabel, accounts, accountsWithEntries, onUpdate, 
 // ---------------------------------------------------------------------------
 
 export default function AccountManager() {
-  const { accounts, entries, accountTypes, addAccount, updateAccount, deleteAccount } = useData();
+  const { accounts, accountTypes, addAccount, updateAccount, deleteAccount } = useData();
+  const { accountsWithEntries } = useAccounts();
   const { owners } = useOwners();
 
   const [newName, setNewName]       = useState('');
@@ -202,8 +204,6 @@ export default function AccountManager() {
 
   const selectedAccountType = accountTypes.find((t) => String(t.id) === newTypeId);
   const subTypeOptions = selectedAccountType?.sub_types ?? [];
-
-  const accountsWithEntries = new Set(entries.map((e) => e.account_id));
 
   // Group accounts by type label
   const groupedByType = useMemo(() => {

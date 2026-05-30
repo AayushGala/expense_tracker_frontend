@@ -1,10 +1,15 @@
 import { useCallback, useMemo } from 'react';
 import { useData } from '../context/DataContext';
-import { computeAccountBalances, computeNetWorth } from '../utils/accounting';
-import { D, ZERO, round2 } from '../utils/money';
+import api from '../api/client';
+import { useApiResource } from './useApiResource';
+import { D, ZERO } from '../utils/money';
 
+// Account list/grouping comes from the (light) in-context accounts array;
+// balances + net worth are computed server-side (/api/accounts/balances/) so
+// the heavy entries array no longer needs to live in memory. Per-account
+// ledgers are fetched on demand by the consumer via api.getAccountLedger().
 export function useAccounts() {
-  const { accounts, categories, entries, transactions } = useData();
+  const { accounts, dataVersion } = useData();
 
   const activeAccounts = useMemo(
     () => accounts.filter((a) => !a._removed),
@@ -22,50 +27,36 @@ export function useAccounts() {
     return grouped;
   }, [activeAccounts]);
 
-  const balances = useMemo(
-    () => computeAccountBalances(entries, activeAccounts),
-    [entries, activeAccounts]
+  const { data, isLoading } = useApiResource(
+    () => api.getAccountBalances(),
+    [dataVersion ?? 0],
   );
 
-  const netWorth = useMemo(
-    () => computeNetWorth(balances, activeAccounts),
-    [balances, activeAccounts]
-  );
+  // Keep the Decimal contract the components expect (AmountDisplay / sum()).
+  const balances = useMemo(() => {
+    const map = new Map();
+    for (const b of data?.balances ?? []) {
+      map.set(b.account_id, D(b.balance));
+    }
+    return map;
+  }, [data]);
+
+  const netWorth = useMemo(() => D(data?.net_worth ?? 0), [data]);
+
+  // Which accounts have any entries (used to warn before delete). Server flags
+  // this so we don't need the entries array in memory.
+  const accountsWithEntries = useMemo(() => {
+    const set = new Set();
+    for (const b of data?.balances ?? []) {
+      if (b.has_entries) set.add(b.account_id);
+    }
+    return set;
+  }, [data]);
 
   const getAccountBalance = useCallback(
     (accountId) => balances.get(accountId) ?? ZERO,
     [balances]
   );
-
-  // Entries sorted by date ascending, each annotated with the running
-  // balance under the account's sign convention.
-  const getAccountLedger = useCallback((accountId) => {
-    const txnDateMap = new Map(transactions.map((t) => [t.id, t.date]));
-
-    const accountEntries = entries
-      .filter((e) => e.account_id === accountId)
-      .map((e) => ({
-        ...e,
-        date: txnDateMap.get(e.transaction_id) ?? e.created_at,
-      }))
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    const account = activeAccounts.find((a) => a.id === accountId);
-    const isDebitNormal =
-      !account || account.type === 'asset' || account.type === 'receivable';
-
-    let runningBalance = ZERO;
-    return accountEntries.map((entry) => {
-      const amt = D(entry.amount);
-      const delta =
-        entry.entry_type === 'DEBIT'
-          ? isDebitNormal ? amt : amt.negated()
-          : isDebitNormal ? amt.negated() : amt;
-
-      runningBalance = round2(runningBalance.plus(delta));
-      return { ...entry, runningBalance };
-    });
-  }, [transactions, entries, activeAccounts]);
 
   return {
     accounts: activeAccounts,
@@ -73,6 +64,7 @@ export function useAccounts() {
     balances,
     netWorth,
     getAccountBalance,
-    getAccountLedger,
+    accountsWithEntries,
+    isLoading,
   };
 }

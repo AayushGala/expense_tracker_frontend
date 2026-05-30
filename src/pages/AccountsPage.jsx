@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useAccounts } from '../hooks/useAccounts';
+import { useApiResource } from '../hooks/useApiResource';
+import api from '../api/client';
 import { useOwners } from '../hooks/useOwners';
 import { useData } from '../context/DataContext';
 import { formatINR } from '../utils/formatters';
@@ -57,13 +59,7 @@ function AccountTypeBadge({ type, subType }) {
 // AccountLedger — displayed inside a modal
 // ---------------------------------------------------------------------------
 
-function AccountLedger({ account, ledger, transactions, onEntryClick }) {
-  // Build a lookup for transaction descriptions
-  const txnMap = useMemo(
-    () => new Map((transactions ?? []).map((t) => [t.id, t])),
-    [transactions]
-  );
-
+function AccountLedger({ account, ledger, onEntryClick }) {
   if (ledger.length === 0) {
     return (
       <EmptyState
@@ -74,12 +70,6 @@ function AccountLedger({ account, ledger, transactions, onEntryClick }) {
     );
   }
 
-  function txnLabel(entry) {
-    const txn = txnMap.get(entry.transaction_id);
-    if (!txn) return '';
-    return txn.notes || txn.beneficiary || txn.description || '';
-  }
-
   // For debit-normal accounts (asset, receivable): debit = money in (+)
   // For credit-normal accounts (liability): credit = money in (+)
   const isDebitNormal = account.type === 'asset' || account.type === 'receivable';
@@ -87,17 +77,24 @@ function AccountLedger({ account, ledger, transactions, onEntryClick }) {
   return (
     <div className="space-y-2">
       {ledger.map((entry) => {
-        const label = txnLabel(entry);
+        // Server ledger rows carry the transaction's notes/beneficiary; the
+        // detail modal self-fetches the rest from this minimal seed.
+        const label = entry.notes || entry.beneficiary || '';
         const isDebit = entry.entry_type === 'DEBIT';
         const isPositive = isDebitNormal ? isDebit : !isDebit;
-        const txn = txnMap.get(entry.transaction_id);
+        const txn = {
+          id: entry.transaction_id,
+          date: entry.date,
+          notes: entry.notes,
+          beneficiary: entry.beneficiary,
+        };
 
         return (
           <button
             key={entry.id}
             type="button"
-            onClick={() => txn && onEntryClick?.(txn)}
-            disabled={!txn}
+            onClick={() => entry.transaction_id && onEntryClick?.(txn)}
+            disabled={!entry.transaction_id}
             className="w-full flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3 text-left hover:bg-gray-100 transition-colors disabled:cursor-default disabled:hover:bg-gray-50"
           >
             {/* Details */}
@@ -238,8 +235,8 @@ function AccountSection({ title, accounts, getBalance, onAccountClick, balanceSu
 // ---------------------------------------------------------------------------
 
 export default function AccountsPage() {
-  const { isLoading, transactions, entries } = useData();
-  const { accountsByType, getAccountBalance, getAccountLedger } = useAccounts();
+  const { isLoading, dataVersion } = useData();
+  const { accountsByType, getAccountBalance } = useAccounts();
   const { owners, ownerOptions } = useOwners();
 
   const [ledgerAccount, setLedgerAccount] = useState(null); // account object | null
@@ -280,11 +277,14 @@ export default function AccountsPage() {
     receivable: receivableTotal,
   };
 
-  // Ledger for selected account
-  const ledgerEntries = useMemo(
-    () => (ledgerAccount ? getAccountLedger(ledgerAccount.id) : []),
-    [ledgerAccount, getAccountLedger]
+  // Ledger for the selected account — fetched on demand from the server when
+  // the modal opens (server returns each entry with its running balance).
+  const { data: ledgerData, isLoading: ledgerLoading } = useApiResource(
+    () => api.getAccountLedger(ledgerAccount.id),
+    [ledgerAccount?.id, dataVersion ?? 0],
+    { skip: !ledgerAccount },
   );
+  const ledgerEntries = ledgerData?.entries ?? [];
 
   // -------------------------------------------------------------------------
   // Handlers
@@ -393,12 +393,17 @@ export default function AccountsPage() {
             </div>
 
             {/* Entries */}
-            <AccountLedger
-              account={ledgerAccount}
-              ledger={ledgerEntries}
-              transactions={transactions}
-              onEntryClick={setSelectedTxn}
-            />
+            {ledgerLoading ? (
+              <div className="py-10 flex items-center justify-center">
+                <LoadingSpinner size="h-8 w-8" />
+              </div>
+            ) : (
+              <AccountLedger
+                account={ledgerAccount}
+                ledger={ledgerEntries}
+                onEntryClick={setSelectedTxn}
+              />
+            )}
           </div>
         )}
       </Modal>
@@ -413,7 +418,6 @@ export default function AccountsPage() {
         {selectedTxn && (
           <TransactionDetail
             transaction={selectedTxn}
-            entries={entries.filter((e) => e.transaction_id === selectedTxn.id)}
             onClose={() => setSelectedTxn(null)}
             onDeleted={() => setSelectedTxn(null)}
             onSelectTransaction={setSelectedTxn}

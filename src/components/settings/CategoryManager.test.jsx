@@ -48,7 +48,7 @@ const FLAT_CATEGORIES = [
 describe('CategoryManager', () => {
   beforeEach(() => {
     mockApi = createMockApi({
-      getAllData: vi.fn().mockResolvedValue({
+      getBootstrapData: vi.fn().mockResolvedValue({
         ...MOCK_ALL_DATA,
         categories: FLAT_CATEGORIES,
       }),
@@ -145,7 +145,7 @@ describe('CategoryManager', () => {
     ];
 
     mockApi = createMockApi({
-      getAllData: vi.fn().mockResolvedValue({
+      getBootstrapData: vi.fn().mockResolvedValue({
         ...MOCK_ALL_DATA,
         categories: categoriesWithNestedChildren,
       }),
@@ -204,7 +204,7 @@ describe('CategoryManager', () => {
 
   it('shows empty state for a type with no categories', async () => {
     mockApi = createMockApi({
-      getAllData: vi.fn().mockResolvedValue({ ...MOCK_ALL_DATA, categories: [] }),
+      getBootstrapData: vi.fn().mockResolvedValue({ ...MOCK_ALL_DATA, categories: [] }),
     });
 
     renderCategoryManager();

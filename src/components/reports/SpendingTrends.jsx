@@ -11,7 +11,8 @@ import {
 import Card from '../common/Card';
 import MultiSelect from '../common/MultiSelect';
 import CategoryFilter from '../common/CategoryFilter';
-import { useReports } from '../../hooks/useReports';
+import LoadingSpinner from '../common/LoadingSpinner';
+import { useSpendingTrends, useBeneficiaries } from '../../hooks/useReportData';
 import { useOwners } from '../../hooks/useOwners';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useData } from '../../context/DataContext';
@@ -34,9 +35,9 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function SpendingTrends() {
-  const { spendingTrends } = useReports();
-  const { categories, transactions } = useData();
+  const { categories } = useData();
   const { owners, ownerOptions } = useOwners();
+  const beneficiaryOptions = useBeneficiaries();
 
   const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
   const [selectedOwners, setSelectedOwners] = useState([]);
@@ -47,23 +48,17 @@ export default function SpendingTrends() {
     [ownerOptions]
   );
 
-  const beneficiaryOptions = useMemo(() => {
-    const set = new Set(transactions.map((t) => t.beneficiary).filter(Boolean));
-    return [...set].sort((a, b) => a.localeCompare(b)).map((b) => ({ value: b, label: b }));
-  }, [transactions]);
+  const trendFilters = useMemo(() => {
+    const f = { owners: selectedOwners, beneficiaries: selectedBeneficiaries };
+    if (selectedCategoryIds.length > 0) f.categoryIds = selectedCategoryIds;
+    return f;
+  }, [selectedCategoryIds, selectedOwners, selectedBeneficiaries]);
+
+  const { data: trendData, isLoading: trendLoading } = useSpendingTrends(trendFilters, 12);
 
   const data = useMemo(
-    () =>
-      spendingTrends(
-        selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
-        12,
-        selectedOwners,
-        selectedBeneficiaries
-      ).map((d) => ({
-        ...d,
-        label: shortMonth(d.month),
-      })),
-    [spendingTrends, selectedCategoryIds, selectedOwners, selectedBeneficiaries]
+    () => trendData.map((d) => ({ ...d, label: shortMonth(d.month) })),
+    [trendData]
   );
 
   const total = useMemo(() => data.reduce((s, d) => s + d.total, 0), [data]);
@@ -80,7 +75,10 @@ export default function SpendingTrends() {
     return f;
   }, [selectedCategoryIds, selectedOwners, selectedBeneficiaries]);
 
-  const { filteredTransactions } = useTransactions(txnFilters);
+  const { transactions: filteredTransactions } = useTransactions(txnFilters, {
+    page: 1,
+    pageSize: 100,
+  });
 
   const categoryLabel = useMemo(() => {
     if (selectedCategoryIds.length === 0) return null;
@@ -145,6 +143,11 @@ export default function SpendingTrends() {
             Monthly spend — {categoryLabel}
           </p>
         )}
+        {trendLoading ? (
+          <div className="h-[280px] flex items-center justify-center">
+            <LoadingSpinner size="h-8 w-8" />
+          </div>
+        ) : (
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={data} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -172,6 +175,7 @@ export default function SpendingTrends() {
             />
           </LineChart>
         </ResponsiveContainer>
+        )}
       </Card>
 
       {/* Transaction list */}

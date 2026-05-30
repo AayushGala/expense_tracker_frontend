@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
 import { useOwners } from '../../hooks/useOwners';
+import { useApiResource } from '../../hooks/useApiResource';
 import api from '../../api/client';
+import LoadingSpinner from '../common/LoadingSpinner';
 import TypeSelector from './TypeSelector';
 import ExpenseForm from './ExpenseForm';
 import IncomeForm from './IncomeForm';
@@ -20,6 +22,23 @@ import {
 import { makePersonId } from './PeopleList';
 
 const PREDEFINED_BENEFICIARIES = ['self', 'family'];
+
+// The detail endpoint returns entries with `account`/`category` FK ids and the
+// transaction with `category`; the form helpers below expect the in-app
+// `account_id`/`category_id` shape, so normalize once here.
+function normalizeDetail(detail) {
+  if (!detail) return null;
+  return {
+    ...detail,
+    category_id: detail.category_id ?? detail.category ?? null,
+    entries: (detail.entries ?? []).map((e) => ({
+      ...e,
+      account_id: e.account ?? e.account_id ?? null,
+      category_id: e.category ?? e.category_id ?? null,
+      transaction_id: e.transaction ?? e.transaction_id,
+    })),
+  };
+}
 
 // Transaction rows hold type/date/notes only; amounts and account refs live
 // in the Entry rows. This rebuilds the form-shaped object for edit mode.
@@ -177,13 +196,23 @@ export default function TransactionForm() {
   const refundOfId = searchParams.get('refund_of');
   const fromSmsId = searchParams.get('from_sms');
   const {
-    transactions, entries, accounts, categories, receivables,
+    accounts, categories, receivables,
     addTransaction, updateTransaction,
   } = useData();
   const { getAccountOwner } = useOwners();
   const toast = useToast();
 
   const isEditing = Boolean(id);
+
+  // Edit/refund source rows are fetched on demand (no longer in memory).
+  const { data: editDetailRaw, isLoading: editLoading } = useApiResource(
+    () => api.getTransaction(id), [id], { skip: !id },
+  );
+  const { data: refundDetailRaw } = useApiResource(
+    () => api.getTransaction(refundOfId), [refundOfId], { skip: !refundOfId },
+  );
+  const editDetail = useMemo(() => normalizeDetail(editDetailRaw), [editDetailRaw]);
+  const refundDetail = useMemo(() => normalizeDetail(refundDetailRaw), [refundDetailRaw]);
 
   // SMS isn't in DataContext (list can grow large); fetched on demand here.
   const [fromSms, setFromSms] = useState(null);
@@ -197,35 +226,32 @@ export default function TransactionForm() {
   }, [fromSmsId]);
 
   const editInitialData = useMemo(() => {
-    if (!id) return null;
-    const txn = transactions.find((t) => String(t.id) === String(id));
-    if (!txn) return null;
-    return buildInitialData(txn, entries, accounts, receivables);
-  }, [id, transactions, entries, accounts, receivables]);
+    if (!editDetail) return null;
+    return buildInitialData(editDetail, editDetail.entries, accounts, editDetail.receivables);
+  }, [editDetail, accounts]);
 
   const refundInitialData = useMemo(() => {
-    if (!refundOfId) return null;
-    const sourceTxn = transactions.find((t) => String(t.id) === String(refundOfId));
-    if (!sourceTxn) return null;
+    if (!refundDetail) return null;
     const refundCategory = categories.find((c) => c.role === 'refund');
     if (!refundCategory) return null;
 
-    const sourceEntries = entries.filter((e) => e.transaction_id === sourceTxn.id);
-    const creditEntry = sourceEntries.find((e) => e.entry_type === 'CREDIT' && e.account_id);
+    const creditEntry = (refundDetail.entries ?? []).find(
+      (e) => e.entry_type === 'CREDIT' && e.account_id,
+    );
 
     return {
       type: 'income',
       date: new Date().toISOString().slice(0, 10),
       amount: creditEntry?.amount ?? '',
       to_account_id: creditEntry?.account_id ?? '',
-      owner: sourceTxn.owner || (creditEntry?.account_id ? getAccountOwner(creditEntry.account_id) : ''),
-      beneficiary: sourceTxn.beneficiary ?? '',
-      platform: sourceTxn.platform ?? '',
-      tags: sourceTxn.tags ?? '',
+      owner: refundDetail.owner || (creditEntry?.account_id ? getAccountOwner(creditEntry.account_id) : ''),
+      beneficiary: refundDetail.beneficiary ?? '',
+      platform: refundDetail.platform ?? '',
+      tags: refundDetail.tags ?? '',
       category_id: refundCategory.id,
-      source_transaction_id: sourceTxn.id,
+      source_transaction_id: refundDetail.id,
     };
-  }, [refundOfId, transactions, entries, categories, getAccountOwner]);
+  }, [refundDetail, categories, getAccountOwner]);
 
   // null until the SMS fetch resolves; the effect below dispatches
   // LOAD_INITIAL once it does.
@@ -260,6 +286,24 @@ export default function TransactionForm() {
     }
     return makeInitialState();
   });
+
+  // Edit/refund initial data is fetched by id (async), so load it into the
+  // reducer once it resolves. A ref guards against re-firing when accounts/
+  // receivables refetch (which would clobber in-progress edits).
+  const initializedRef = useRef(false);
+  useEffect(() => {
+    if (initializedRef.current) return;
+    const initial = editInitialData ?? refundInitialData;
+    if (!initial) return;
+    initializedRef.current = true;
+    dispatch({
+      type: 'LOAD_INITIAL',
+      payload: {
+        type: initial.type,
+        values: valuesFromInitialData(initial, { receivables }) ?? {},
+      },
+    });
+  }, [editInitialData, refundInitialData, receivables]);
 
   // Don't overwrite edit/refund prefill with SMS data (those URL params
   // combined with ?from_sms would be contradictory).
@@ -320,6 +364,14 @@ export default function TransactionForm() {
       case 'reimbursement': return <ReimbursementForm {...subFormProps} />;
       default:              return null;
     }
+  }
+
+  if (isEditing && editLoading) {
+    return (
+      <div className="max-w-2xl mx-auto py-20 flex justify-center">
+        <LoadingSpinner size="h-10 w-10" />
+      </div>
+    );
   }
 
   return (

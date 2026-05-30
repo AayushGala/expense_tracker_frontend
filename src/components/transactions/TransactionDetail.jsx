@@ -2,20 +2,30 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
+import { useApiResource } from '../../hooks/useApiResource';
+import api from '../../api/client';
 import { formatDate, formatINR, transactionTypeLabel } from '../../utils/formatters';
-import { D, sum, ZERO } from '../../utils/money';
+import { D, sum } from '../../utils/money';
 import Badge from '../common/Badge';
 
 export default function TransactionDetail({
   transaction,
-  entries = [],
+  entries: entriesProp,
   onClose,
   onDeleted,
   onSelectTransaction,
 }) {
   const navigate = useNavigate();
   const toast = useToast();
-  const { accounts, categories, transactions, entries: allEntries, deleteTransaction } = useData();
+  const { accounts, categories, deleteTransaction, dataVersion } = useData();
+
+  // Self-fetch the full detail (entries + refund chain + source) instead of
+  // reading the global in-memory transactions/entries arrays.
+  const { data: detail } = useApiResource(
+    () => api.getTransaction(transaction.id),
+    [transaction.id, dataVersion ?? 0],
+  );
+  const entries = detail?.entries ?? entriesProp ?? [];
 
   const accountMap = useMemo(
     () => new Map(accounts.map((a) => [a.id, a])),
@@ -57,11 +67,7 @@ export default function TransactionDetail({
     onClose();
   }
 
-  const sourceTransactionId = transaction.source_transaction ?? null;
-  const sourceTxn = useMemo(() => {
-    if (!sourceTransactionId) return null;
-    return transactions.find((t) => t.id === sourceTransactionId) ?? null;
-  }, [transactions, sourceTransactionId]);
+  const sourceTxn = detail?.source_transaction_detail ?? null;
 
   function handleOpenSource() {
     if (!sourceTxn) return;
@@ -82,23 +88,25 @@ export default function TransactionDetail({
     }
   }
 
+  // Refund chain comes from the detail endpoint (income txns whose
+  // source_transaction points at this one), newest first.
   const linkedRefunds = useMemo(() => {
-    return transactions
-      .filter((t) => t.source_transaction === transaction.id)
-      .map((t) => {
-        const txnEntries = allEntries.filter((e) => e.transaction_id === t.id);
-        const debitEntry = txnEntries.find((e) => e.entry_type === 'DEBIT' && e.account_id);
-        return { ...t, amount: debitEntry?.amount ?? ZERO };
-      })
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [transactions, allEntries, transaction.id]);
+    return [...(detail?.linked_refunds ?? [])].sort(
+      (a, b) => new Date(b.date) - new Date(a.date)
+    );
+  }, [detail]);
 
   const totalRefunded = sum(linkedRefunds.map((r) => r.amount));
 
+  // Prefer the fetched detail (full record) but fall back to the row/seed prop
+  // so the header paints immediately and minimal {id} seeds (e.g. from the SMS
+  // drawer or account ledger) still render once the detail loads.
+  const t = detail ?? transaction;
   const {
-    type, amount, date, notes, beneficiary, platform, tags,
-    category_id, created_at,
-  } = transaction;
+    type, amount, date, notes, beneficiary, platform, tags, created_at,
+  } = t;
+  const category_id = t.category_id ?? t.category ?? null;
+  const categoryName = t.category_name ?? transaction.category_name;
 
   // useTransactions enriches transactions with `amount`; callers from other
   // pages (SMS modal, account ledger) pass raw rows that have no amount.
@@ -130,7 +138,7 @@ export default function TransactionDetail({
   const detailRows = [
     fromName && { label: 'From Account', value: fromName },
     toName && { label: 'To Account', value: toName },
-    category_id && { label: 'Category', value: categoryMap.get(category_id)?.name ?? transaction.category_name ?? category_id },
+    category_id && { label: 'Category', value: categoryMap.get(category_id)?.name ?? categoryName ?? category_id },
     beneficiary && { label: 'Beneficiary', value: beneficiary.charAt(0).toUpperCase() + beneficiary.slice(1) },
     platform && { label: 'Platform', value: platform },
     tags?.length > 0 && { label: 'Tags', value: Array.isArray(tags) ? tags.join(', ') : tags },

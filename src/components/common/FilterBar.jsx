@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
 import { useOwners } from '../../hooks/useOwners';
+import { useBeneficiaries } from '../../hooks/useReportData';
 import api from '../../api/client';
 import Dropdown from './Dropdown';
 import MultiSelect from './MultiSelect';
@@ -19,17 +20,15 @@ const TRANSACTION_TYPES = [
 ];
 
 export default function FilterBar({ filters = {}, onChange, onBulkChange, onReset, className = '' }) {
-  const { accounts, categories, transactions } = useData();
+  const { accounts, categories } = useData();
   const { ownerOptions } = useOwners();
+  const beneficiaryOptions = useBeneficiaries();
 
   const accountOptions = accounts
     .filter((a) => !a._removed)
     .map((a) => ({ value: a.id, label: a.name }));
 
   const categoryIds = filters.categoryIds ?? [];
-
-  const beneficiaryOptions = [...new Set(transactions.map((t) => t.beneficiary).filter(Boolean))]
-    .map((b) => ({ value: b, label: b }));
 
   const [platformList, setPlatformList] = useState([]);
   const [tagList, setTagList] = useState([]);

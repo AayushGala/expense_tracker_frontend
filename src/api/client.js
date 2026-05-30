@@ -42,6 +42,31 @@ async function request(method, path, body) {
   return res.json();
 }
 
+// Like request() but returns the raw response body as a Blob (for CSV export).
+async function requestBlob(path) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Token ${token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, { headers });
+  if (res.status === 401) {
+    clearToken();
+    window.location.href = '/login';
+    throw new Error('Unauthorized');
+  }
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.blob();
+}
+
+// Build a query string from a params object or URLSearchParams.
+function qs(params) {
+  if (!params) return '';
+  const s = params instanceof URLSearchParams
+    ? params.toString()
+    : new URLSearchParams(params).toString();
+  return s ? `?${s}` : '';
+}
+
 const api = {
   get: (path) => request('GET', path),
   post: (path, body) => request('POST', path, body),
@@ -73,6 +98,7 @@ const api = {
   getMe: () => request('GET', '/api/auth/me/'),
 
   // Bulk data
+  getBootstrapData: () => request('GET', '/api/data/bootstrap/'),
   getAllData: () => request('GET', '/api/data/all/'),
 
   // Accounts
@@ -101,10 +127,23 @@ const api = {
   deleteTransaction: (id) => request('DELETE', `/api/transactions/${id}/`),
   getTransactionTags: () => request('GET', '/api/transactions/tags/'),
   getTransactionPlatforms: () => request('GET', '/api/transactions/platforms/'),
-  getTransactionSummary: (params) => {
-    const qs = params ? new URLSearchParams(params).toString() : '';
-    return request('GET', `/api/transactions/summary/${qs ? '?' + qs : ''}`);
-  },
+  getTransactionSummary: (params) => request('GET', `/api/transactions/summary/${qs(params)}`),
+
+  // Aggregates / reports (all accept the same TransactionFilterSet params).
+  getMonthlySpending: (params) => request('GET', `/api/transactions/monthly_spending/${qs(params)}`),
+  getCategoryBreakdown: (params) => request('GET', `/api/transactions/category_breakdown/${qs(params)}`),
+  getCashflow: (params) => request('GET', `/api/transactions/cashflow/${qs(params)}`),
+  getSpendingTrends: (params) => request('GET', `/api/transactions/spending_trends/${qs(params)}`),
+  getBeneficiaries: () => request('GET', '/api/transactions/beneficiaries/'),
+  getTagCounts: () => request('GET', '/api/transactions/tag_counts/'),
+  getTransactionsCSV: (params) => requestBlob(`/api/transactions/export/${qs(params)}`),
+
+  // Account aggregates.
+  getAccountBalances: () => request('GET', '/api/accounts/balances/'),
+  getAccountLedger: (id) => request('GET', `/api/accounts/${id}/ledger/`),
+
+  // Receivables rollup.
+  getReceivablesRollup: () => request('GET', '/api/receivables/summary/'),
 
   // Receivables
   getReceivables: (params) => {

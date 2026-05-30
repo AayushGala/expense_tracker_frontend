@@ -107,7 +107,7 @@ describe('AccountManager', () => {
 
   it('shows "No accounts yet" when there are no accounts in a group', async () => {
     mockApi = createMockApi({
-      getAllData: vi.fn().mockResolvedValue({ ...MOCK_ALL_DATA, accounts: [] }),
+      getBootstrapData: vi.fn().mockResolvedValue({ ...MOCK_ALL_DATA, accounts: [] }),
     });
 
     renderAccountManager();

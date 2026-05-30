@@ -12,6 +12,9 @@ import {
 import Card from '../common/Card';
 import Dropdown from '../common/Dropdown';
 import { useAccounts } from '../../hooks/useAccounts';
+import { useApiResource } from '../../hooks/useApiResource';
+import api from '../../api/client';
+import { useData } from '../../context/DataContext';
 import { formatINR, formatDate } from '../../utils/formatters';
 
 function CustomTooltip({ active, payload, label }) {
@@ -25,13 +28,21 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function AccountHistory() {
-  const { accounts, getAccountLedger, getAccountBalance } = useAccounts();
+  const { accounts, getAccountBalance } = useAccounts();
+  const { dataVersion } = useData();
 
   const [selectedAccountId, setSelectedAccountId] = useState(accounts[0]?.id ?? '');
 
+  const { data: ledgerData } = useApiResource(
+    () => api.getAccountLedger(selectedAccountId),
+    [selectedAccountId, dataVersion ?? 0],
+    { skip: !selectedAccountId },
+  );
+
+  // Server returns running_balance (snake); the chart/table expect runningBalance.
   const ledger = useMemo(
-    () => (selectedAccountId ? getAccountLedger(selectedAccountId) : []),
-    [getAccountLedger, selectedAccountId]
+    () => (ledgerData?.entries ?? []).map((e) => ({ ...e, runningBalance: e.running_balance })),
+    [ledgerData]
   );
 
   const chartData = useMemo(

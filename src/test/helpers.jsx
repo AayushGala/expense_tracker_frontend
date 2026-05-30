@@ -53,12 +53,22 @@ export const MOCK_ALL_DATA = {
   settings: {},
 };
 
+// The app bootstrap payload (no transactions/entries/budgets).
+export const MOCK_BOOTSTRAP = {
+  account_types: MOCK_ACCOUNT_TYPES,
+  accounts: MOCK_ACCOUNTS,
+  categories: MOCK_CATEGORIES,
+  receivables: [],
+  settings: {},
+};
+
 // ---------------------------------------------------------------------------
 // Create a mock api module
 // ---------------------------------------------------------------------------
 
 export function createMockApi(overrides = {}) {
   return {
+    getBootstrapData: vi.fn().mockResolvedValue(MOCK_BOOTSTRAP),
     getAllData: vi.fn().mockResolvedValue(MOCK_ALL_DATA),
     getAccountTypes: vi.fn().mockResolvedValue(MOCK_ACCOUNT_TYPES),
     createAccountType: vi.fn().mockResolvedValue({ id: 99, name: 'test', label: 'Test', sub_types: [] }),
@@ -75,11 +85,24 @@ export function createMockApi(overrides = {}) {
     createCategory: vi.fn().mockResolvedValue({ id: 99, name: 'New Cat', type: 'expense' }),
     updateCategory: vi.fn().mockImplementation((id, data) => Promise.resolve({ id, ...data })),
     deleteCategory: vi.fn().mockResolvedValue(null),
-    getTransactions: vi.fn().mockResolvedValue([]),
+    getTransactions: vi.fn().mockResolvedValue({ count: 0, next: null, previous: null, results: [] }),
+    getTransaction: vi.fn().mockResolvedValue({ id: 1, entries: [], receivables: [], linked_refunds: [], source_transaction_detail: null }),
     getTransactionSummary: vi.fn().mockResolvedValue({
       total_outflow: 0, total_inflow: 0, net: 0, count: 0,
       transfer_count: 0, transfer_amount: 0,
     }),
+    getTransactionsCSV: vi.fn().mockResolvedValue(new Blob([''], { type: 'text/csv' })),
+    getTransactionTags: vi.fn().mockResolvedValue([]),
+    getTransactionPlatforms: vi.fn().mockResolvedValue([]),
+    getTagCounts: vi.fn().mockResolvedValue([]),
+    getBeneficiaries: vi.fn().mockResolvedValue([]),
+    getMonthlySpending: vi.fn().mockResolvedValue({ data: [] }),
+    getCategoryBreakdown: vi.fn().mockResolvedValue({ month: '', data: [] }),
+    getCashflow: vi.fn().mockResolvedValue({ data: [] }),
+    getSpendingTrends: vi.fn().mockResolvedValue({ data: [] }),
+    getAccountBalances: vi.fn().mockResolvedValue({ balances: [], net_worth: '0', by_type: { asset: '0', liability: '0', receivable: '0' } }),
+    getAccountLedger: vi.fn().mockResolvedValue({ account_id: null, type: null, entries: [] }),
+    getReceivablesRollup: vi.fn().mockResolvedValue({ total_owed: 0, by_person: [] }),
     createTransaction: vi.fn().mockResolvedValue({ id: 1, entries: [], receivables: [] }),
     updateTransaction: vi.fn().mockResolvedValue({ id: 1, entries: [] }),
     deleteTransaction: vi.fn().mockResolvedValue(null),

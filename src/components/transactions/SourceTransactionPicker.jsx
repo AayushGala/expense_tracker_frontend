@@ -1,62 +1,57 @@
 import { useMemo } from 'react';
+import api from '../../api/client';
+import { useApiResource } from '../../hooks/useApiResource';
 import { useData } from '../../context/DataContext';
+import { buildTransactionParams } from '../../utils/transactionParams';
 import Select from '../common/Select';
 import { formatINR } from '../../utils/formatters';
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
+function buildLabel(t) {
+  const cat = t.category_name || '—';
+  const acct = t.account_names?.[0] || '';
+  const descriptor = t.notes || t.beneficiary || t.category_name || 'Expense';
+  return `${t.date} · ${cat} · ${descriptor}${acct ? ` · ${acct}` : ''} · ${formatINR(t.amount)}`;
+}
+
 /**
  * Picker for selecting an expense transaction as the "source" of a refund.
- * Shows expense transactions from the last 30 days, sorted newest first.
- * The currently-selected source (if older than 30 days) is always included
- * so the user can see what's selected even after filter changes.
+ * Fetches expense transactions from the last 30 days (newest first). The
+ * currently-selected source is fetched separately so it stays visible even if
+ * it's older than 30 days.
  */
 export default function SourceTransactionPicker({ value, onChange }) {
-  const { transactions, entries, accounts, categories } = useData();
+  const { dataVersion } = useData();
 
-  const accountMap = useMemo(
-    () => new Map(accounts.map((a) => [a.id, a])),
-    [accounts]
+  const dateFrom = new Date(Date.now() - ONE_MONTH_MS).toISOString().slice(0, 10);
+  const params = buildTransactionParams(
+    { types: ['expense'], dateFrom },
+    { ordering: '-date', page_size: 100 },
   );
-  const categoryMap = useMemo(
-    () => new Map(categories.map((c) => [c.id, c])),
-    [categories]
+  const { data } = useApiResource(
+    () => api.getTransactions(params),
+    [params.toString(), dataVersion ?? 0],
   );
 
-  // Build per-transaction display amount from entries (CREDIT account amount = what left the account)
-  const entriesByTxn = useMemo(() => {
-    const map = new Map();
-    for (const e of entries) {
-      if (!map.has(e.transaction_id)) map.set(e.transaction_id, []);
-      map.get(e.transaction_id).push(e);
-    }
-    return map;
-  }, [entries]);
+  const rows = data?.results ?? [];
+  const selectedId = value != null ? value : null;
+  const hasSelected = selectedId != null && rows.some((r) => r.id === selectedId);
+
+  // Pull the selected source individually when it's not in the recent window.
+  const { data: selectedDetail } = useApiResource(
+    () => api.getTransaction(selectedId),
+    [selectedId],
+    { skip: selectedId == null || hasSelected },
+  );
 
   const options = useMemo(() => {
-    const cutoff = Date.now() - ONE_MONTH_MS;
-    const selectedKey = value != null ? String(value) : null;
-    const expenseTxns = transactions.filter((t) => {
-      if (t.type !== 'expense') return false;
-      // Always keep the currently-selected source visible even if older than 30 days
-      if (selectedKey && String(t.id) === selectedKey) return true;
-      const ts = new Date(t.date).getTime();
-      return ts >= cutoff;
-    });
-
-    expenseTxns.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-    return expenseTxns.map((t) => {
-      const txnEntries = entriesByTxn.get(t.id) ?? [];
-      const creditEntry = txnEntries.find((e) => e.entry_type === 'CREDIT' && e.account_id);
-      const amount = creditEntry?.amount ?? 0;
-      const accountName = accountMap.get(creditEntry?.account_id)?.name ?? '';
-      const categoryName = categoryMap.get(t.category_id)?.name ?? '';
-      const descriptor = t.notes || t.beneficiary || categoryName || 'Expense';
-      const label = `${t.date} · ${categoryName || '—'} · ${descriptor}${accountName ? ` · ${accountName}` : ''} · ${formatINR(amount)}`;
-      return { value: String(t.id), label };
-    });
-  }, [transactions, entriesByTxn, accountMap, categoryMap, value]);
+    const opts = rows.map((t) => ({ value: String(t.id), label: buildLabel(t) }));
+    if (selectedId != null && !hasSelected && selectedDetail) {
+      opts.unshift({ value: String(selectedDetail.id), label: buildLabel(selectedDetail) });
+    }
+    return opts;
+  }, [rows, selectedId, hasSelected, selectedDetail]);
 
   if (options.length === 0) {
     return (

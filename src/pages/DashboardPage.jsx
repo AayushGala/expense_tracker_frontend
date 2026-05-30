@@ -15,7 +15,7 @@ import {
 } from 'recharts';
 import { useAccounts } from '../hooks/useAccounts';
 import { useOwners } from '../hooks/useOwners';
-import { useReports } from '../hooks/useReports';
+import { useMonthlySpending, useCategoryBreakdown, useReceivablesRollup } from '../hooks/useReportData';
 import { useData } from '../context/DataContext';
 import { useTransactions } from '../hooks/useTransactions';
 import Card from '../components/common/Card';
@@ -141,7 +141,19 @@ function NetWorthCard({ accountsByType, balances, netWorth }) {
 // MonthlySpendingChart
 // ---------------------------------------------------------------------------
 
-function MonthlySpendingChart({ data }) {
+function MonthlySpendingChart({ data, isLoading }) {
+  if (isLoading) {
+    return (
+      <Card className="p-6 flex flex-col gap-3">
+        <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+          Monthly Spending — Last 6 Months
+        </h3>
+        <div className="h-[200px] flex items-center justify-center">
+          <LoadingSpinner size="h-8 w-8" />
+        </div>
+      </Card>
+    );
+  }
   if (!data || data.every((d) => d.total === 0)) {
     return (
       <Card className="p-6 flex flex-col gap-3">
@@ -204,7 +216,19 @@ function MonthlySpendingChart({ data }) {
 // CategoryPieChart
 // ---------------------------------------------------------------------------
 
-function CategoryPieChart({ data }) {
+function CategoryPieChart({ data, isLoading }) {
+  if (isLoading) {
+    return (
+      <Card className="p-6 flex flex-col gap-3">
+        <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+          This Month by Category
+        </h3>
+        <div className="h-[240px] flex items-center justify-center">
+          <LoadingSpinner size="h-8 w-8" />
+        </div>
+      </Card>
+    );
+  }
   if (!data || data.length === 0) {
     return (
       <Card className="p-6 flex flex-col gap-3">
@@ -420,7 +444,6 @@ export default function DashboardPage() {
   const { isLoading } = useData();
   const { accountsByType, balances, netWorth, getAccountBalance } = useAccounts();
   const { owners } = useOwners();
-  const { monthlySpending, categoryBreakdown, receivablesSummary } = useReports();
 
   // URL-backed so dashboard filters survive reload/share.
   const [dashFilters, setDashFilters] = useUrlFilters(DASHBOARD_FILTER_SCHEMA, DASHBOARD_DEFAULTS);
@@ -434,22 +457,16 @@ export default function DashboardPage() {
   const ownerValue =
     ownerFilter === 'All' ? undefined : ownerFilter;
 
-  const spendingData = useMemo(() => {
-    const ben = beneficiaryFilter ? [beneficiaryFilter] : undefined;
-    const own = ownerValue ? [ownerValue] : undefined;
-    return monthlySpending(ben, 6, own);
-  }, [beneficiaryFilter, ownerValue, monthlySpending]);
+  const reportFilters = useMemo(() => {
+    const f = {};
+    if (beneficiaryFilter) f.beneficiaries = [beneficiaryFilter];
+    if (ownerValue) f.owners = [ownerValue];
+    return f;
+  }, [beneficiaryFilter, ownerValue]);
 
-  const categoryData = useMemo(() => {
-    const ben = beneficiaryFilter ? [beneficiaryFilter] : undefined;
-    const own = ownerValue ? [ownerValue] : undefined;
-    return categoryBreakdown(ben, undefined, own);
-  }, [beneficiaryFilter, ownerValue, categoryBreakdown]);
-
-  const receivables = useMemo(
-    () => receivablesSummary(),
-    [receivablesSummary]
-  );
+  const { data: spendingData, isLoading: spendingLoading } = useMonthlySpending(reportFilters, 6);
+  const { data: categoryData, isLoading: categoryLoading } = useCategoryBreakdown(reportFilters);
+  const receivables = useReceivablesRollup();
 
   // Filter net worth by owner
   const filteredAccountsByType = useMemo(() => {
@@ -491,17 +508,13 @@ export default function DashboardPage() {
     return filtered;
   }, [ownerValue, balances, accountsByType]);
 
-  const txnFilters = useMemo(
-    () => {
-      const f = {};
-      if (beneficiaryFilter) f.beneficiary = beneficiaryFilter;
-      if (ownerValue) f.owner = ownerValue;
-      return f;
-    },
-    [beneficiaryFilter, ownerValue]
-  );
-  const { filteredTransactions } = useTransactions(txnFilters);
-  const recentTxns = filteredTransactions.slice(0, 15);
+  // Recent activity: the most recent page of transactions for the current
+  // beneficiary/owner filter (server-paginated, no full in-memory set).
+  const { transactions: recentTxns } = useTransactions(reportFilters, {
+    page: 1,
+    pageSize: 15,
+    ordering: '-date',
+  });
 
   if (isLoading) {
     return (
@@ -532,12 +545,12 @@ export default function DashboardPage() {
           balances={filteredBalances}
           netWorth={filteredNetWorth}
         />
-        <MonthlySpendingChart data={spendingData} />
+        <MonthlySpendingChart data={spendingData} isLoading={spendingLoading} />
       </div>
 
       {/* Middle row: pie chart + receivables */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <CategoryPieChart data={categoryData} />
+        <CategoryPieChart data={categoryData} isLoading={categoryLoading} />
         <ReceivablesSummary summary={receivables} />
       </div>
 

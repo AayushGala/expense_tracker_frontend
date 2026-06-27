@@ -270,10 +270,17 @@ export default function TransactionForm() {
       beneficiary: fromSms.parsed_beneficiary ?? '',
       notes: fromSms.body ?? '',
     };
+    // parsed_account is the SOURCE side for debits and the DESTINATION side
+    // for credits (where the money lands). For types that move money between
+    // accounts (transfer/bill_payment/investment), parsed_to_account is the
+    // explicit destination.
     if (txnType === 'income') {
       base.to_account_id = fromSms.parsed_account ?? '';
     } else {
       base.from_account_id = fromSms.parsed_account ?? '';
+      if (fromSms.parsed_to_account) {
+        base.to_account_id = fromSms.parsed_to_account;
+      }
     }
     return base;
   }, [fromSms]);

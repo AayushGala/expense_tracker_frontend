@@ -15,6 +15,25 @@ import { D, round2 } from '../../utils/money';
 
 const PREDEFINED_BENEFICIARIES = ['self', 'family'];
 
+const SUPPORTED_TYPES = ['expense', 'income', 'bill_payment', 'transfer', 'investment'];
+const TYPES_WITH_FROM_ACCOUNT = new Set(['expense', 'transfer', 'bill_payment', 'investment']);
+const TYPES_WITH_TO_ACCOUNT = new Set(['income', 'transfer', 'bill_payment', 'investment']);
+const TYPES_WITH_CATEGORY = new Set(['expense', 'income']);
+const TYPE_LABELS = {
+  expense: 'Expense',
+  income: 'Income',
+  bill_payment: 'Bill Pay',
+  transfer: 'Transfer',
+  investment: 'Invest',
+};
+
+function resolveInitialType(sms) {
+  if (sms?.parsed_type && SUPPORTED_TYPES.includes(sms.parsed_type)) {
+    return sms.parsed_type;
+  }
+  return sms?.parsed_direction === 'credit' ? 'income' : 'expense';
+}
+
 function deriveBeneficiaryFields(raw) {
   // LLM usually parses a merchant name ("Swiggy") which is neither 'self' nor
   // 'family' — surface that under "custom" with the value pre-filled.
@@ -30,12 +49,14 @@ function deriveBeneficiaryFields(raw) {
 
 function initialStateFromSms(sms) {
   const today = new Date().toISOString().slice(0, 10);
+  const type = resolveInitialType(sms);
   return {
     values: {
-      type: sms?.parsed_direction === 'credit' ? 'income' : 'expense',
+      type,
       amount: sms?.parsed_amount ?? '',
       date: sms?.parsed_date ?? today,
-      account_id: String(sms?.parsed_account ?? ''),
+      from_account_id: String(sms?.parsed_account ?? ''),
+      to_account_id: String(sms?.parsed_to_account ?? ''),
       category_id: String(sms?.parsed_category ?? ''),
       ...deriveBeneficiaryFields(sms?.parsed_beneficiary),
       notes: '',
@@ -138,8 +159,15 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
     const parsed = D(values.amount);
     if (!values.amount || parsed.lte(0)) errs.amount = 'Enter a positive amount.';
     if (!values.date) errs.date = 'Date is required.';
-    if (!values.account_id) errs.account_id = 'Select an account.';
-    if (!values.category_id) errs.category_id = 'Select a category.';
+    if (TYPES_WITH_FROM_ACCOUNT.has(values.type) && !values.from_account_id) {
+      errs.from_account_id = 'Select an account.';
+    }
+    if (TYPES_WITH_TO_ACCOUNT.has(values.type) && !values.to_account_id) {
+      errs.to_account_id = 'Select an account.';
+    }
+    if (TYPES_WITH_CATEGORY.has(values.type) && !values.category_id) {
+      errs.category_id = 'Select a category.';
+    }
     if (values.beneficiary_type === 'custom' && !(values.custom_beneficiary ?? '').trim()) {
       errs.custom_beneficiary = 'Enter a beneficiary name.';
     }
@@ -157,16 +185,24 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
     const beneficiary = values.beneficiary_type === 'custom'
       ? values.custom_beneficiary.trim()
       : values.beneficiary_type;
+    const payload = {
+      type: values.type,
+      amount: round2(D(values.amount)).toString(),
+      date: values.date,
+      beneficiary,
+      notes: values.notes,
+    };
+    if (TYPES_WITH_FROM_ACCOUNT.has(values.type)) {
+      payload.from_account_id = parseInt(values.from_account_id, 10);
+    }
+    if (TYPES_WITH_TO_ACCOUNT.has(values.type)) {
+      payload.to_account_id = parseInt(values.to_account_id, 10);
+    }
+    if (TYPES_WITH_CATEGORY.has(values.type)) {
+      payload.category_id = parseInt(values.category_id, 10);
+    }
     try {
-      await confirmSMS(sms.id, {
-        type: values.type,
-        amount: round2(D(values.amount)).toString(),
-        date: values.date,
-        from_account_id: parseInt(values.account_id, 10),
-        category_id: parseInt(values.category_id, 10),
-        beneficiary,
-        notes: values.notes,
-      });
+      await confirmSMS(sms.id, payload);
       toast.success('SMS confirmed as transaction');
       onSuccess?.();
     } catch (err) {
@@ -210,6 +246,7 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
   if (!sms) return null;
 
   const parsedAccountName = sms.parsed_account ? accountMap.get(sms.parsed_account)?.name : null;
+  const parsedToAccountName = sms.parsed_to_account ? accountMap.get(sms.parsed_to_account)?.name : null;
   const parsedCategoryName = sms.parsed_category ? categoryMap.get(sms.parsed_category)?.name : null;
 
   const hasParsedFields = (
@@ -217,6 +254,7 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
     sms.parsed_direction ||
     sms.parsed_type ||
     sms.parsed_account != null ||
+    sms.parsed_to_account != null ||
     sms.parsed_category != null ||
     sms.parsed_beneficiary ||
     sms.parsed_date ||
@@ -259,7 +297,8 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
             <ParsedRow label="Amount" value={sms.parsed_amount ? formatINR(sms.parsed_amount) : '—'} />
             <ParsedRow label="Direction" value={sms.parsed_direction || '—'} />
             <ParsedRow label="Type" value={sms.parsed_type ? sms.parsed_type.replace(/_/g, ' ') : '—'} />
-            <ParsedRow label="Account" value={parsedAccountName || '—'} />
+            <ParsedRow label="From Account" value={parsedAccountName || '—'} />
+            <ParsedRow label="To Account" value={parsedToAccountName || '—'} />
             <ParsedRow label="Category" value={parsedCategoryName || '—'} />
             <ParsedRow label="Beneficiary" value={sms.parsed_beneficiary || '—'} />
             <ParsedRow label="Date" value={sms.parsed_date || '—'} />
@@ -279,30 +318,22 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
             Confirm as transaction
           </p>
 
-          {/* Type radio */}
-          <div className="flex items-center gap-2 mb-4">
-            <button
-              type="button"
-              onClick={() => dispatch({ type: 'SET_TYPE', value: 'expense' })}
-              className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-colors ${
-                values.type === 'expense'
-                  ? 'bg-brand text-white border-brand'
-                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              Expense
-            </button>
-            <button
-              type="button"
-              onClick={() => dispatch({ type: 'SET_TYPE', value: 'income' })}
-              className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold transition-colors ${
-                values.type === 'income'
-                  ? 'bg-accent-light text-brand border-accent'
-                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              Income
-            </button>
+          {/* Type radio (5 types) */}
+          <div className="grid grid-cols-5 gap-2 mb-4">
+            {SUPPORTED_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => dispatch({ type: 'SET_TYPE', value: t })}
+                className={`rounded-xl border py-2.5 text-xs font-semibold transition-colors ${
+                  values.type === t
+                    ? 'bg-brand text-white border-brand'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                {TYPE_LABELS[t]}
+              </button>
+            ))}
           </div>
 
           {/* Amount + Date */}
@@ -331,29 +362,45 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
             </div>
           </div>
 
-          {/* Account */}
-          <div className="mb-4">
-            <label className={labelClass}>{values.type === 'income' ? 'Received Into' : 'Paid From'}</label>
-            <Select
-              value={values.account_id}
-              onChange={(e) => setField('account_id', e.target.value)}
-              options={usableAccounts.map(accountOption)}
-              placeholder="Select account"
-            />
-            {errors.account_id && <p className={errorClass}>{errors.account_id}</p>}
-          </div>
+          {/* Accounts — From / To, conditional on type */}
+          {TYPES_WITH_FROM_ACCOUNT.has(values.type) && (
+            <div className="mb-4">
+              <label className={labelClass}>Paid From</label>
+              <Select
+                value={values.from_account_id}
+                onChange={(e) => setField('from_account_id', e.target.value)}
+                options={usableAccounts.map(accountOption)}
+                placeholder="Select account"
+              />
+              {errors.from_account_id && <p className={errorClass}>{errors.from_account_id}</p>}
+            </div>
+          )}
+          {TYPES_WITH_TO_ACCOUNT.has(values.type) && (
+            <div className="mb-4">
+              <label className={labelClass}>{values.type === 'income' ? 'Received Into' : 'To Account'}</label>
+              <Select
+                value={values.to_account_id}
+                onChange={(e) => setField('to_account_id', e.target.value)}
+                options={usableAccounts.map(accountOption)}
+                placeholder="Select account"
+              />
+              {errors.to_account_id && <p className={errorClass}>{errors.to_account_id}</p>}
+            </div>
+          )}
 
-          {/* Category */}
-          <div className="mb-4">
-            <label className={labelClass}>Category</label>
-            <Select
-              value={values.category_id}
-              onChange={(e) => setField('category_id', e.target.value)}
-              options={categoryOptions(filteredCategories)}
-              placeholder="Select category"
-            />
-            {errors.category_id && <p className={errorClass}>{errors.category_id}</p>}
-          </div>
+          {/* Category — only for expense/income */}
+          {TYPES_WITH_CATEGORY.has(values.type) && (
+            <div className="mb-4">
+              <label className={labelClass}>Category</label>
+              <Select
+                value={values.category_id}
+                onChange={(e) => setField('category_id', e.target.value)}
+                options={categoryOptions(filteredCategories)}
+                placeholder="Select category"
+              />
+              {errors.category_id && <p className={errorClass}>{errors.category_id}</p>}
+            </div>
+          )}
 
           {/* Beneficiary + Notes */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

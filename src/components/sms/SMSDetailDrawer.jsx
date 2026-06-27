@@ -248,18 +248,6 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
         </div>
       </div>
 
-      {/* Masked body (what was sent to the LLM) */}
-      {sms.llm_input_redacted && (
-        <div>
-          <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">
-            Sent to LLM (PII redacted)
-          </p>
-          <div className="rounded-xl bg-accent-light/30 border border-accent/20 px-4 py-3 text-sm text-gray-700 font-mono whitespace-pre-wrap break-words">
-            {sms.llm_input_redacted}
-          </div>
-        </div>
-      )}
-
       {/* Parsed result */}
       {hasParsedFields && (
         <div>

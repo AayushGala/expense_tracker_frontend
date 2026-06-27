@@ -162,16 +162,17 @@ export default function SMSPage() {
           disabled={bulkBusy}
           className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
         >
-          {bulkBusy ? 'Parsing…' : '▶ Parse all pending'}
+          {bulkBusy ? 'Queueing…' : '▶ Parse all pending'}
         </button>
       </div>
 
-      {/* Bulk result toast */}
+      {/* Bulk result toast — parses run in the background queue, so the
+          response just reports how many were queued, not the outcome. */}
       {bulkResult && !bulkResult.error && (
         <div className="rounded-xl border border-accent/30 bg-accent-light/30 px-4 py-2.5 text-xs text-brand">
-          Parsed {bulkResult.parsed} of {bulkResult.total} pending SMS
-          {bulkResult.ignored > 0 && ` · ${bulkResult.ignored} ignored (non-transactional)`}
-          {bulkResult.failed > 0 && ` · ${bulkResult.failed} failed`}
+          {bulkResult.queued > 0
+            ? `Queued ${bulkResult.queued} SMS for parsing — refresh in a moment to see results.`
+            : 'No pending SMS to parse.'}
         </div>
       )}
       {bulkResult?.error && (

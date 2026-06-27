@@ -257,7 +257,11 @@ export default function TransactionForm() {
   // LOAD_INITIAL once it does.
   const fromSmsInitialData = useMemo(() => {
     if (!fromSms) return null;
-    const txnType = fromSms.parsed_direction === 'credit' ? 'income' : 'expense';
+    // Prefer the LLM-classified transaction_type when available; otherwise
+    // fall back to direction-derived expense/income.
+    const txnType =
+      fromSms.parsed_type ||
+      (fromSms.parsed_direction === 'credit' ? 'income' : 'expense');
     const base = {
       type: txnType,
       date: fromSms.parsed_date ?? new Date().toISOString().slice(0, 10),

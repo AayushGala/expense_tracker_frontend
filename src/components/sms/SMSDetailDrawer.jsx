@@ -215,6 +215,7 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
   const hasParsedFields = (
     sms.parsed_amount != null ||
     sms.parsed_direction ||
+    sms.parsed_type ||
     sms.parsed_account != null ||
     sms.parsed_category != null ||
     sms.parsed_beneficiary ||
@@ -257,6 +258,7 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
           <dl className="rounded-xl ring-1 ring-gray-100 divide-y divide-gray-50 text-sm">
             <ParsedRow label="Amount" value={sms.parsed_amount ? formatINR(sms.parsed_amount) : '—'} />
             <ParsedRow label="Direction" value={sms.parsed_direction || '—'} />
+            <ParsedRow label="Type" value={sms.parsed_type ? sms.parsed_type.replace(/_/g, ' ') : '—'} />
             <ParsedRow label="Account" value={parsedAccountName || '—'} />
             <ParsedRow label="Category" value={parsedCategoryName || '—'} />
             <ParsedRow label="Beneficiary" value={sms.parsed_beneficiary || '—'} />

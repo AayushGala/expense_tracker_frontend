@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import Card from '../common/Card';
 import api from '../../api/client';
+import { useData } from '../../context/DataContext';
+import { inputClass } from '../../utils/formStyles';
 import { downloadBlob, csvTimestamp } from '../../utils/transactionCsv';
 
 function formatSize(bytes) {
@@ -9,7 +11,40 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// 'error: rclone copyto failed: …' → shown in red; 'ok' → green.
+function CloudBackupStatus({ lastRun, lastStatus }) {
+  if (!lastRun) {
+    return (
+      <p className="text-xs text-gray-400">
+        Never ran. Schedule <code className="text-[10px]">manage.py backup_to_drive</code> daily on the server.
+      </p>
+    );
+  }
+  const ok = lastStatus === 'ok';
+  return (
+    <p className="text-xs">
+      <span className={ok ? 'text-accent font-medium' : 'text-red-500 font-medium'}>
+        {ok ? '✓ Last backup succeeded' : '✕ Last backup failed'}
+      </span>
+      <span className="text-gray-400"> · {new Date(lastRun).toLocaleString()}</span>
+      {!ok && <span className="block mt-1 text-red-500">{lastStatus}</span>}
+    </p>
+  );
+}
+
 export default function DataExport() {
+  const { settings, updateSettings } = useData();
+
+  // --- Cloud backup config ---
+  const [remote, setRemote] = useState(settings.backup_rclone_remote ?? '');
+  const [remoteSaved, setRemoteSaved] = useState(false);
+
+  async function handleSaveRemote() {
+    await updateSettings('backup_rclone_remote', remote.trim());
+    setRemoteSaved(true);
+    setTimeout(() => setRemoteSaved(false), 2500);
+  }
+
   // --- Backup state ---
   const [backups, setBackups] = useState([]);
   const [backupBusy, setBackupBusy] = useState(false);
@@ -89,6 +124,43 @@ export default function DataExport() {
 
   return (
     <div className="space-y-6">
+      <Card className="p-5">
+        <div className="pb-3 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-800">Cloud Backup (Google Drive)</h3>
+          <p className="text-[11px] text-gray-400 mt-0.5">
+            A scheduled task on the server snapshots the database and uploads it via rclone.
+          </p>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <CloudBackupStatus
+            lastRun={settings.backup_last_run}
+            lastStatus={settings.backup_last_status}
+          />
+
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                rclone remote folder
+              </label>
+              <input
+                type="text"
+                value={remote}
+                onChange={(e) => setRemote(e.target.value)}
+                placeholder="gdrive:ExpenseTrackerBackups"
+                className={inputClass}
+              />
+            </div>
+            <button
+              onClick={handleSaveRemote}
+              className="shrink-0 text-sm px-5 py-2.5 bg-brand text-white rounded-xl font-bold hover:bg-brand-hover transition-colors"
+            >
+              {remoteSaved ? 'Saved ✓' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </Card>
+
       <Card className="p-5">
         <div className="pb-3 border-b border-gray-100">
           <h3 className="text-base font-bold text-gray-800">Database Backups</h3>

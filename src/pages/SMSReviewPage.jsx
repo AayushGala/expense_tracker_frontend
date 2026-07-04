@@ -4,7 +4,14 @@ import api from '../api/client';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import Select from '../components/common/Select';
 import SMSStatusBadge from '../components/sms/SMSStatusBadge';
+import AccountPicker from '../components/forms/AccountPicker';
+import AmountInput from '../components/forms/AmountInput';
+import CategoryPicker from '../components/forms/CategoryPicker';
+import DateField from '../components/forms/DateField';
+import { inputClass, labelClass } from '../utils/formStyles';
+import { transactionTypeLabel } from '../utils/formatters';
 import { effectiveSmsStatus } from '../utils/sms';
 import {
   CONFIRM_TYPES,
@@ -21,11 +28,6 @@ import {
 } from '../utils/smsReview';
 
 const MAX_PAGES = 4; // safety cap: 4 × 50 messages per window
-
-// text-base (16px) on inputs is deliberate: anything smaller makes iOS Safari
-// zoom the page on focus. Compactness comes from padding, not font size.
-const fieldCls = 'w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-base';
-const labelCls = 'block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5';
 
 /**
  * End-of-day review: one SMS per card, newest window first configurable.
@@ -107,10 +109,10 @@ export default function SMSReviewPage() {
           <button
             key={w.value}
             onClick={() => setSince(w.value)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+            className={`shrink-0 inline-flex items-center rounded-xl border px-4 py-2 text-sm font-semibold transition-all duration-150 ${
               since === w.value
-                ? 'bg-brand text-white'
-                : 'bg-white border border-gray-300 text-gray-600'
+                ? 'bg-accent-light text-brand border-accent shadow-sm'
+                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700 hover:bg-gray-50'
             }`}
           >
             {w.label}
@@ -298,119 +300,95 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
             </Link>
           </div>
         ) : values && (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {!isLinked && (
-              <select
-                value={values.type}
-                onChange={(e) => setValues({ ...values, type: e.target.value })}
-                className={`${fieldCls} font-medium`}
-              >
-                {CONFIRM_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                {CONFIRM_TYPES.map((t) => {
+                  const isSelected = values.type === t.value;
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setValues({ ...values, type: t.value })}
+                      className={`flex-shrink-0 inline-flex items-center rounded-xl px-4 py-2 text-sm font-semibold border transition-all duration-150 ${
+                        isSelected
+                          ? 'bg-accent-light text-brand border-accent shadow-sm'
+                          : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {transactionTypeLabel(t.value)}
+                    </button>
+                  );
+                })}
+              </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
-              <label className="block">
-                <span className={labelCls}>Amount</span>
-                <input
-                  type="number" inputMode="decimal" step="0.01" min="0.01"
+            <div className="grid grid-cols-2 gap-3">
+              {/* onBlur bubbles from the input, committing typed edits on linked cards */}
+              <div onBlur={commitField}>
+                <AmountInput
+                  variant="compact"
+                  id={`review-amount-${sms.id}`}
                   value={values.amount}
-                  onChange={(e) => changeField('amount', e.target.value)}
-                  onBlur={commitField}
-                  className={`${fieldCls} font-semibold`}
+                  onChange={(val) => changeField('amount', val)}
                 />
-              </label>
-              <label className="block">
-                <span className={labelCls}>Date</span>
-                <input
-                  type="date"
-                  value={values.date}
-                  onChange={(e) => changeField('date', e.target.value)}
-                  onBlur={commitField}
-                  className={fieldCls}
-                />
-              </label>
+              </div>
+              <DateField
+                value={values.date}
+                onChange={(val) => changeField('date', val, { autosave: true })}
+              />
             </div>
 
             {TYPES_WITH_FROM_ACCOUNT.has(cardType) && (
-              <label className="block">
-                <span className={labelCls}>From account</span>
-                <select
-                  value={values.from_account_id}
-                  onChange={(e) => changeField('from_account_id', e.target.value, { autosave: true })}
-                  className={`${fieldCls} font-medium`}
-                >
-                  <option value="">— pick account —</option>
-                  {usableAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}{a.owner ? ` (${a.owner})` : ''}</option>
-                  ))}
-                </select>
-              </label>
+              <AccountPicker
+                label={cardType === 'expense' ? 'Paid from' : 'From account'}
+                value={values.from_account_id}
+                accounts={usableAccounts}
+                onChange={(accountId) => changeField('from_account_id', accountId, { autosave: true })}
+              />
             )}
 
             {TYPES_WITH_TO_ACCOUNT.has(cardType) && (
-              <label className="block">
-                <span className={labelCls}>To account</span>
-                <select
-                  value={values.to_account_id}
-                  onChange={(e) => changeField('to_account_id', e.target.value, { autosave: true })}
-                  className={`${fieldCls} font-medium`}
-                >
-                  <option value="">— pick account —</option>
-                  {usableAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}{a.owner ? ` (${a.owner})` : ''}</option>
-                  ))}
-                </select>
-              </label>
+              <AccountPicker
+                label="To account"
+                value={values.to_account_id}
+                accounts={usableAccounts}
+                onChange={(accountId) => changeField('to_account_id', accountId, { autosave: true })}
+              />
             )}
 
             {TYPES_WITH_CATEGORY.has(cardType) && (
-              <label className="block">
-                <span className={labelCls}>Category</span>
-                <select
-                  value={values.category_id}
-                  onChange={(e) => changeField('category_id', e.target.value, { autosave: true })}
-                  className={`${fieldCls} font-medium`}
-                >
-                  <option value="">— pick category —</option>
-                  {filteredCategories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </label>
+              <CategoryPicker
+                value={values.category_id}
+                categories={filteredCategories}
+                onChange={(categoryId) => changeField('category_id', categoryId, { autosave: true })}
+              />
             )}
 
-            <div className="grid grid-cols-2 gap-2">
-              <label className="block">
-                <span className={labelCls}>Owner</span>
-                <select
-                  value={values.owner}
-                  onChange={(e) => changeField('owner', e.target.value, { autosave: true })}
-                  className={fieldCls}
-                >
-                  <option value="">Auto (from account)</option>
-                  {owners.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </label>
-              <label className="block">
-                <span className={labelCls}>Beneficiary</span>
+            <div className="grid grid-cols-2 gap-3">
+              <Select
+                label="Owner"
+                value={values.owner}
+                onChange={(e) => changeField('owner', e.target.value, { autosave: true })}
+                options={owners.map((o) => ({ value: o, label: o }))}
+                placeholder="Auto (from account)"
+              />
+              <div onBlur={commitField}>
+                <label className={labelClass}>Beneficiary</label>
                 <input
                   type="text"
                   value={values.beneficiary}
                   onChange={(e) => changeField('beneficiary', e.target.value)}
-                  onBlur={commitField}
-                  className={fieldCls}
+                  className={inputClass}
                 />
-              </label>
+              </div>
             </div>
 
             {!isLinked ? (
               <button
                 onClick={handleConfirm}
                 disabled={busy}
-                className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                className="w-full rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
               >
                 {busy ? 'Saving…' : 'Confirm transaction'}
               </button>

@@ -22,6 +22,11 @@ import {
 
 const MAX_PAGES = 4; // safety cap: 4 × 50 messages per window
 
+// text-base (16px) on inputs is deliberate: anything smaller makes iOS Safari
+// zoom the page on focus. Compactness comes from padding, not font size.
+const fieldCls = 'w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-base';
+const labelCls = 'block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5';
+
 /**
  * End-of-day review: one SMS per card, newest window first configurable.
  * Swipe (or arrows) to move; the linked transaction's from-account /
@@ -253,11 +258,6 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
     }
   }
 
-  const missingClass = (filled) => (
-    `w-full rounded-xl border px-3 py-2.5 text-base font-medium bg-white ${
-      filled ? 'border-gray-300' : 'border-amber-400 bg-amber-50'
-    }`
-  );
 
   return (
     <div
@@ -298,12 +298,12 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
             </Link>
           </div>
         ) : values && (
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {!isLinked && (
               <select
                 value={values.type}
                 onChange={(e) => setValues({ ...values, type: e.target.value })}
-                className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-base font-medium bg-white"
+                className={`${fieldCls} font-medium`}
               >
                 {CONFIRM_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -311,36 +311,36 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
               </select>
             )}
 
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-2">
               <label className="block">
-                <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Amount</span>
+                <span className={labelCls}>Amount</span>
                 <input
                   type="number" inputMode="decimal" step="0.01" min="0.01"
                   value={values.amount}
                   onChange={(e) => changeField('amount', e.target.value)}
                   onBlur={commitField}
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-base font-semibold"
+                  className={`${fieldCls} font-semibold`}
                 />
               </label>
               <label className="block">
-                <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Date</span>
+                <span className={labelCls}>Date</span>
                 <input
                   type="date"
                   value={values.date}
                   onChange={(e) => changeField('date', e.target.value)}
                   onBlur={commitField}
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-base bg-white"
+                  className={fieldCls}
                 />
               </label>
             </div>
 
             {TYPES_WITH_FROM_ACCOUNT.has(cardType) && (
               <label className="block">
-                <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">From account</span>
+                <span className={labelCls}>From account</span>
                 <select
                   value={values.from_account_id}
                   onChange={(e) => changeField('from_account_id', e.target.value, { autosave: true })}
-                  className={missingClass(values.from_account_id)}
+                  className={`${fieldCls} font-medium`}
                 >
                   <option value="">— pick account —</option>
                   {usableAccounts.map((a) => (
@@ -352,11 +352,11 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
 
             {TYPES_WITH_TO_ACCOUNT.has(cardType) && (
               <label className="block">
-                <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">To account</span>
+                <span className={labelCls}>To account</span>
                 <select
                   value={values.to_account_id}
                   onChange={(e) => changeField('to_account_id', e.target.value, { autosave: true })}
-                  className={missingClass(values.to_account_id)}
+                  className={`${fieldCls} font-medium`}
                 >
                   <option value="">— pick account —</option>
                   {usableAccounts.map((a) => (
@@ -368,11 +368,11 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
 
             {TYPES_WITH_CATEGORY.has(cardType) && (
               <label className="block">
-                <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Category</span>
+                <span className={labelCls}>Category</span>
                 <select
                   value={values.category_id}
                   onChange={(e) => changeField('category_id', e.target.value, { autosave: true })}
-                  className={missingClass(values.category_id)}
+                  className={`${fieldCls} font-medium`}
                 >
                   <option value="">— pick category —</option>
                   {filteredCategories.map((c) => (
@@ -382,26 +382,26 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
               </label>
             )}
 
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-2">
               <label className="block">
-                <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Owner</span>
+                <span className={labelCls}>Owner</span>
                 <select
                   value={values.owner}
                   onChange={(e) => changeField('owner', e.target.value, { autosave: true })}
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-base bg-white"
+                  className={fieldCls}
                 >
                   <option value="">Auto (from account)</option>
                   {owners.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </label>
               <label className="block">
-                <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Beneficiary</span>
+                <span className={labelCls}>Beneficiary</span>
                 <input
                   type="text"
                   value={values.beneficiary}
                   onChange={(e) => changeField('beneficiary', e.target.value)}
                   onBlur={commitField}
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-base"
+                  className={fieldCls}
                 />
               </label>
             </div>
@@ -410,7 +410,7 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
               <button
                 onClick={handleConfirm}
                 disabled={busy}
-                className="w-full rounded-xl bg-brand px-4 py-3 text-base font-bold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
               >
                 {busy ? 'Saving…' : 'Confirm transaction'}
               </button>

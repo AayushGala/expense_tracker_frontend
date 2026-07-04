@@ -20,6 +20,7 @@ const AccountsPage    = lazy(() => import('./pages/AccountsPage'))
 const ReportsPage     = lazy(() => import('./pages/ReportsPage'))
 const SettingsPage    = lazy(() => import('./pages/SettingsPage'))
 const SMSPage         = lazy(() => import('./pages/SMSPage'))
+const SMSReviewPage   = lazy(() => import('./pages/SMSReviewPage'))
 const TransactionForm = lazy(() => import('./components/transactions/TransactionForm'))
 
 // Small fallback for route transitions. DataGate still handles the initial
@@ -111,6 +112,7 @@ export default function App() {
                               <Route path="/accounts" element={<AccountsPage />} />
                               <Route path="/reports" element={<ReportsPage />} />
                               <Route path="/sms" element={<SMSPage />} />
+                              <Route path="/sms/review" element={<SMSReviewPage />} />
                               <Route path="/settings" element={<SettingsPage />} />
                             </Route>
                             <Route path="*" element={<Navigate to="/" replace />} />

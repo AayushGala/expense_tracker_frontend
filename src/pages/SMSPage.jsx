@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api/client';
 import { useUrlFilters } from '../hooks/useUrlFilters';
 import Card from '../components/common/Card';
@@ -64,6 +65,9 @@ export default function SMSPage() {
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState(null);
+  // How far back "Parse pending" reaches — avoids resurrecting a month-old
+  // backlog by accident. Days as string, or 'all'.
+  const [parseWindow, setParseWindow] = useState('7');
 
   // Debounce search input → debouncedSearch
   useEffect(() => {
@@ -118,7 +122,7 @@ export default function SMSPage() {
     setBulkBusy(true);
     setBulkResult(null);
     try {
-      const result = await api.parsePendingSMS();
+      const result = await api.parsePendingSMS(parseWindow);
       setBulkResult(result);
       await fetchSms();
     } catch (err) {
@@ -157,13 +161,35 @@ export default function SMSPage() {
             Review parsed messages from your phones and confirm them into transactions.
           </p>
         </div>
-        <button
-          onClick={handleParsePending}
-          disabled={bulkBusy}
-          className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
-        >
-          {bulkBusy ? 'Queueing…' : '▶ Parse all pending'}
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/sms/review"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+          >
+            ✓ Review
+          </Link>
+          <div className="flex items-center">
+            <select
+              value={parseWindow}
+              onChange={(e) => setParseWindow(e.target.value)}
+              title="Only queue SMS received in this window"
+              className="rounded-l-xl border border-r-0 border-gray-200 bg-white px-2 py-2.5 text-sm text-gray-600 focus:outline-none focus:border-accent"
+            >
+              <option value="1">Today</option>
+              <option value="3">3 days</option>
+              <option value="7">7 days</option>
+              <option value="30">30 days</option>
+              <option value="all">All time</option>
+            </select>
+            <button
+              onClick={handleParsePending}
+              disabled={bulkBusy}
+              className="shrink-0 inline-flex items-center gap-2 rounded-r-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
+            >
+              {bulkBusy ? 'Queueing…' : '▶ Parse pending'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Bulk result toast — parses run in the background queue, so the

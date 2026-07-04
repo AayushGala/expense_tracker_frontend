@@ -196,7 +196,12 @@ const api = {
   confirmSMS: (id, body) => request('POST', `/api/sms/${id}/confirm/`, body),
   reparseSMS: (id) => request('POST', `/api/sms/${id}/reparse/`),
   ignoreSMS: (id) => request('POST', `/api/sms/${id}/ignore/`),
-  parsePendingSMS: () => request('POST', '/api/sms/parse-pending/'),
+  // sinceDays: number of days back to include (1 = today), or 'all'/undefined
+  // to parse every pending SMS regardless of age.
+  parsePendingSMS: (sinceDays) => request(
+    'POST', '/api/sms/parse-pending/',
+    sinceDays && sinceDays !== 'all' ? { since_days: sinceDays } : {},
+  ),
 
   // Token helpers
   getToken,

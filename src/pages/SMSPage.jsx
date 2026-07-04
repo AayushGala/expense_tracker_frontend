@@ -66,8 +66,9 @@ export default function SMSPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState(null);
   // How far back "Parse pending" reaches — avoids resurrecting a month-old
-  // backlog by accident. Days as string, or 'all'.
-  const [parseWindow, setParseWindow] = useState('7');
+  // backlog by accident. Days as string, or 'all'. Today by default: parsing
+  // is a daily ritual.
+  const [parseWindow, setParseWindow] = useState('1');
 
   // Debounce search input → debouncedSearch
   useEffect(() => {
@@ -164,16 +165,21 @@ export default function SMSPage() {
         <div className="flex items-center gap-2">
           <Link
             to="/sms/review"
-            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover transition-colors"
           >
-            ✓ Review
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+            </svg>
+            Review
           </Link>
-          <div className="flex items-center">
+          {/* One visual control: window select + action share a border/radius */}
+          <div className="shrink-0 inline-flex items-stretch rounded-xl border border-gray-200 bg-white overflow-hidden">
             <select
               value={parseWindow}
               onChange={(e) => setParseWindow(e.target.value)}
               title="Only queue SMS received in this window"
-              className="rounded-l-xl border border-r-0 border-gray-200 bg-white px-2 py-2.5 text-sm text-gray-600 focus:outline-none focus:border-accent"
+              className="border-0 bg-transparent pl-3 pr-7 py-2.5 text-sm text-gray-600 focus:outline-none focus:ring-0"
             >
               <option value="1">Today</option>
               <option value="3">3 days</option>
@@ -181,12 +187,13 @@ export default function SMSPage() {
               <option value="30">30 days</option>
               <option value="all">All time</option>
             </select>
+            <span className="w-px self-stretch bg-gray-200" aria-hidden="true" />
             <button
               onClick={handleParsePending}
               disabled={bulkBusy}
-              className="shrink-0 inline-flex items-center gap-2 rounded-r-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
             >
-              {bulkBusy ? 'Queueing…' : '▶ Parse pending'}
+              {bulkBusy ? 'Queueing…' : 'Parse pending'}
             </button>
           </div>
         </div>

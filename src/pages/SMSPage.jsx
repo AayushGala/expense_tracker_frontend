@@ -22,6 +22,14 @@ const STATUS_OPTIONS = [
   { value: 'ignored',   label: 'Ignored' },
 ];
 
+const PARSE_WINDOW_LABELS = {
+  1: 'today',
+  3: '3 days',
+  7: '7 days',
+  30: '30 days',
+  all: 'all',
+};
+
 const EMPTY_FILTERS = {
   statuses: [],     // default: show all statuses
   devices: [],
@@ -173,28 +181,36 @@ export default function SMSPage() {
             </svg>
             Review
           </Link>
-          {/* One visual control: window select + action share a border/radius */}
-          <div className="shrink-0 inline-flex items-stretch rounded-xl border border-gray-200 bg-white overflow-hidden">
-            <select
-              value={parseWindow}
-              onChange={(e) => setParseWindow(e.target.value)}
-              title="Only queue SMS received in this window"
-              className="border-0 bg-transparent pl-3 pr-7 py-2.5 text-sm text-gray-600 focus:outline-none focus:ring-0"
-            >
-              <option value="1">Today</option>
-              <option value="3">3 days</option>
-              <option value="7">7 days</option>
-              <option value="30">30 days</option>
-              <option value="all">All time</option>
-            </select>
-            <span className="w-px self-stretch bg-gray-200" aria-hidden="true" />
+          {/* Split button: the action parses, the chevron segment picks the window */}
+          <div className="shrink-0 inline-flex items-stretch rounded-xl bg-brand text-white overflow-hidden">
             <button
               onClick={handleParsePending}
               disabled={bulkBusy}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1.5 pl-4 pr-3 py-2.5 text-sm font-semibold hover:bg-brand-hover disabled:opacity-50 transition-colors"
             >
-              {bulkBusy ? 'Queueing…' : 'Parse pending'}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              {bulkBusy ? 'Queueing…' : `Parse ${PARSE_WINDOW_LABELS[parseWindow]}`}
             </button>
+            <span className="w-px self-stretch bg-white/20" aria-hidden="true" />
+            <div className="relative inline-flex items-stretch hover:bg-brand-hover transition-colors">
+              <select
+                value={parseWindow}
+                onChange={(e) => setParseWindow(e.target.value)}
+                aria-label="How far back to parse"
+                className="appearance-none h-full border-0 bg-transparent pl-2.5 pr-8 text-sm font-semibold text-white focus:outline-none focus:ring-0 cursor-pointer [&>option]:text-gray-900"
+              >
+                <option value="1">Today</option>
+                <option value="3">Last 3 days</option>
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="all">All time</option>
+              </select>
+              <svg xmlns="http://www.w3.org/2000/svg" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
           </div>
         </div>
       </div>

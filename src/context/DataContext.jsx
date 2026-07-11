@@ -211,6 +211,7 @@ export function DataProvider({ children }) {
         categories: data.categories ?? [],
         receivables: (data.receivables ?? []).map(transformReceivable),
         settings: data.settings ?? {},
+        book_closed_through: data.book_closed_through ?? null,
       },
     });
   }, []);

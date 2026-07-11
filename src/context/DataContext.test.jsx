@@ -66,6 +66,26 @@ describe('DataContext', () => {
     expect(mockApi.getAccountTypes).toHaveBeenCalledTimes(1);
   });
 
+  // Bug fix: applyRawData built the SET_DATA payload explicitly and silently
+  // dropped book_closed_through, so lock checks always compared against null.
+  it('exposes book_closed_through from the bootstrap payload', async () => {
+    mockApi = createMockApi({
+      getBootstrapData: vi.fn().mockResolvedValue({
+        ...MOCK_ALL_DATA,
+        book_closed_through: '2026-06-30',
+      }),
+    });
+    const { result } = renderHook(() => useData(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.book_closed_through).toBe('2026-06-30');
+  });
+
+  it('book_closed_through defaults to null when books were never closed', async () => {
+    const { result } = renderHook(() => useData(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.book_closed_through).toBeNull();
+  });
+
   // -----------------------------------------------------------------------
   // accountTypes stays an array even when loadData runs
   // (Bug fix: SET_DATA was overwriting accountTypes with undefined)

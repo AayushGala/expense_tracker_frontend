@@ -12,6 +12,35 @@ const inputClass =
 // Account Row
 // ---------------------------------------------------------------------------
 
+// Last digits of the account/card number ("4916" or "0260,4916"). The SMS
+// parser uses these to match "Card ending 4916" to the right account, so a
+// wrong-account parse is usually fixed by filling this in.
+function SuffixInput({ account, onUpdate }) {
+  const [value, setValue] = useState(account.number_suffix || '');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const trimmed = value.trim();
+    if (trimmed === (account.number_suffix || '')) return;
+    setSaving(true);
+    await onUpdate(account.id, { number_suffix: trimmed });
+    setSaving(false);
+  }
+
+  return (
+    <input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+      placeholder="№ ending"
+      title="Last digits of the account/card number — used to match SMS to this account (comma-separate multiple)"
+      disabled={saving}
+      className="w-20 text-[11px] border border-gray-200 rounded-lg px-1.5 py-1 text-gray-500 placeholder-gray-300 focus:outline-none focus:ring-1 focus:ring-accent/30 shrink-0 disabled:opacity-50"
+    />
+  );
+}
+
 function AccountRow({ account, hasEntries, onUpdate, onDelete, owners }) {
   const [editing, setEditing]     = useState(false);
   const [name, setName]           = useState(account.name);
@@ -73,6 +102,7 @@ function AccountRow({ account, hasEntries, onUpdate, onDelete, owners }) {
           {account.sub_type && (
             <span className="text-[11px] text-gray-400 shrink-0">{account.sub_type}</span>
           )}
+          <SuffixInput account={account} onUpdate={onUpdate} />
           {owners.length > 0 && (
             <select
               value={account.owner || ''}

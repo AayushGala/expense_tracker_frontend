@@ -181,6 +181,11 @@ const api = {
   listBackups: () => request('GET', '/api/backups/'),
   createBackup: () => request('POST', '/api/backups/'),
 
+  // Book closes
+  getBookCloses: () => request('GET', '/api/book-closes/'),
+  createBookClose: (data) => request('POST', '/api/book-closes/', data),
+  reopenBookClose: (id) => request('DELETE', `/api/book-closes/${id}/`),
+
   // SMS
   getSMSMessages: (params) => {
     let qs = '';

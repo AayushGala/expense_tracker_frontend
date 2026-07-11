@@ -11,6 +11,9 @@ const initialState = {
   receivables: [],
   accountTypes: [],
   settings: {},
+  // Date (YYYY-MM-DD) through which the books are closed; transactions at or
+  // before it are read-only. Arrives via the bootstrap payload.
+  book_closed_through: null,
   isLoading: true,
   error: null,
   // Bumped after every transaction mutation so server-backed hooks (list,

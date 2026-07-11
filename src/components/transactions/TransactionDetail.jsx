@@ -4,6 +4,7 @@ import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import api from '../../api/client';
+import { isDateClosed } from '../../utils/bookClose';
 import { formatDate, formatINR, transactionTypeLabel } from '../../utils/formatters';
 import { D, sum } from '../../utils/money';
 import Badge from '../common/Badge';
@@ -17,7 +18,7 @@ export default function TransactionDetail({
 }) {
   const navigate = useNavigate();
   const toast = useToast();
-  const { accounts, categories, deleteTransaction, dataVersion } = useData();
+  const { accounts, categories, deleteTransaction, dataVersion, book_closed_through } = useData();
 
   // Self-fetch the full detail (entries + refund chain + source) instead of
   // reading the global in-memory transactions/entries arrays.
@@ -68,6 +69,12 @@ export default function TransactionDetail({
   }
 
   const sourceTxn = detail?.source_transaction_detail ?? null;
+
+  // Transactions in a closed period are read-only — the server enforces it;
+  // the UI hides the mutations. Refunds stay available (they're new
+  // transactions in the open period).
+  const txnDate = detail?.date ?? transaction.date;
+  const inClosedBooks = isDateClosed(txnDate, book_closed_through);
 
   function handleOpenSource() {
     if (!sourceTxn) return;
@@ -267,13 +274,15 @@ export default function TransactionDetail({
 
       {/* Action buttons */}
       <div className="flex gap-2 pt-1 flex-wrap">
-        <button
-          onClick={handleEdit}
-          className="flex-1 min-w-[100px] rounded-xl bg-brand py-2.5 text-sm
-                     font-semibold text-white hover:bg-brand-hover transition-colors"
-        >
-          Edit
-        </button>
+        {!inClosedBooks && (
+          <button
+            onClick={handleEdit}
+            className="flex-1 min-w-[100px] rounded-xl bg-brand py-2.5 text-sm
+                       font-semibold text-white hover:bg-brand-hover transition-colors"
+          >
+            Edit
+          </button>
+        )}
         {type === 'expense' && (
           <button
             onClick={handleRefund}
@@ -283,18 +292,25 @@ export default function TransactionDetail({
             ↩ Refund
           </button>
         )}
-        <button
-          onClick={handleDelete}
-          disabled={linkedRefunds.length > 0}
-          title={linkedRefunds.length > 0
-            ? `Delete the ${linkedRefunds.length === 1 ? 'refund' : `${linkedRefunds.length} refunds`} first.`
-            : undefined}
-          className="flex-1 min-w-[100px] rounded-xl border border-gray-200 py-2.5 text-sm
-                     font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-        >
-          Delete
-        </button>
+        {!inClosedBooks && (
+          <button
+            onClick={handleDelete}
+            disabled={linkedRefunds.length > 0}
+            title={linkedRefunds.length > 0
+              ? `Delete the ${linkedRefunds.length === 1 ? 'refund' : `${linkedRefunds.length} refunds`} first.`
+              : undefined}
+            className="flex-1 min-w-[100px] rounded-xl border border-gray-200 py-2.5 text-sm
+                       font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+          >
+            Delete
+          </button>
+        )}
       </div>
+      {inClosedBooks && (
+        <p className="text-[11px] text-gray-400 text-center">
+          🔒 In closed books (through {formatDate(book_closed_through)}) — record corrections as new transactions.
+        </p>
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import OwnerSettings from '../components/settings/OwnerSettings';
 import AccountTypeManager from '../components/settings/AccountTypeManager';
 import SMSSettings from '../components/settings/SMSSettings';
 import DataExport from '../components/settings/DataExport';
+import BookCloseManager from '../components/settings/BookCloseManager';
 
 const SECTIONS = [
   { id: 'categories',   label: 'Categories',   icon: 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z' },
@@ -14,6 +15,7 @@ const SECTIONS = [
   { id: 'owners',       label: 'Owners',       icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
   { id: 'tags',         label: 'Tags',         icon: 'M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z M6 6h.008v.008H6V6z' },
   { id: 'sms',          label: 'SMS',          icon: 'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z' },
+  { id: 'book-close',   label: 'Book Closing', icon: 'M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z' },
   { id: 'export',       label: 'Data Export',   icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' },
 ];
 
@@ -99,6 +101,7 @@ export default function SettingsPage() {
           {activeSection === 'owners'      && <OwnerSettings />}
           {activeSection === 'tags'        && <TagManager />}
           {activeSection === 'sms'         && <SMSSettings />}
+          {activeSection === 'book-close'  && <BookCloseManager />}
           {activeSection === 'export'      && <DataExport />}
         </div>
       </div>

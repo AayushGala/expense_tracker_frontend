@@ -12,6 +12,7 @@ import CategoryPicker from '../components/forms/CategoryPicker';
 import DateField from '../components/forms/DateField';
 import { inputClass, labelClass } from '../utils/formStyles';
 import { transactionTypeLabel } from '../utils/formatters';
+import { isDateClosed } from '../utils/bookClose';
 import { effectiveSmsStatus } from '../utils/sms';
 import {
   CONFIRM_TYPES,
@@ -152,7 +153,7 @@ export default function SMSReviewPage() {
 // ---------------------------------------------------------------------------
 
 function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgnored }) {
-  const { accounts, categories, settings, confirmSMS, invalidate } = useData();
+  const { accounts, categories, settings, confirmSMS, invalidate, book_closed_through } = useData();
   const toast = useToast();
 
   const isLinked = !!sms.transaction;
@@ -187,7 +188,8 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
     [categories, cardType],
   );
 
-  const editable = !isLinked || (txn && CARD_EDITABLE_TYPES.has(txn.type));
+  const inClosedBooks = isLinked && txn && isDateClosed(txn.date, book_closed_through);
+  const editable = (!isLinked || (txn && CARD_EDITABLE_TYPES.has(txn.type))) && !inClosedBooks;
 
   // Save the linked transaction with the given values (full payload so entry
   // regeneration has everything it needs).
@@ -295,9 +297,15 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
         ) : !editable ? (
           <div className="rounded-xl border border-gray-200 p-3 text-sm">
             <p className="font-semibold">{txn.type.replace('_', ' ')} · {txn.date}</p>
-            <Link to={`/transactions/${txn.id}/edit`} className="mt-1 inline-block text-accent font-medium hover:underline">
-              Edit in full form →
-            </Link>
+            {inClosedBooks ? (
+              <p className="mt-1 text-xs text-gray-400">
+                🔒 In closed books — record corrections as new transactions.
+              </p>
+            ) : (
+              <Link to={`/transactions/${txn.id}/edit`} className="mt-1 inline-block text-accent font-medium hover:underline">
+                Edit in full form →
+              </Link>
+            )}
           </div>
         ) : values && (
           <div className="space-y-4">

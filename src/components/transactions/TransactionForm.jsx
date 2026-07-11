@@ -19,6 +19,7 @@ import {
   transactionFormReducer,
   makeInitialState,
 } from './transactionFormReducer';
+import { isDateClosed } from '../../utils/bookClose';
 import { makePersonId } from './PeopleList';
 
 const PREDEFINED_BENEFICIARIES = ['self', 'family'];
@@ -197,7 +198,7 @@ export default function TransactionForm() {
   const fromSmsId = searchParams.get('from_sms');
   const {
     accounts, categories, receivables,
-    addTransaction, updateTransaction,
+    addTransaction, updateTransaction, book_closed_through,
   } = useData();
   const { getAccountOwner } = useOwners();
   const toast = useToast();
@@ -381,6 +382,31 @@ export default function TransactionForm() {
     return (
       <div className="max-w-2xl mx-auto py-20 flex justify-center">
         <LoadingSpinner size="h-10 w-10" />
+      </div>
+    );
+  }
+
+  // Closed books: the server would reject the save anyway — say so up front
+  // instead of letting the user fill in a doomed form.
+  if (isEditing && editDetailRaw && isDateClosed(editDetailRaw.date, book_closed_through)) {
+    return (
+      <div className="max-w-2xl mx-auto py-16">
+        <Card className="p-8 text-center">
+          <p className="text-3xl mb-3">🔒</p>
+          <h2 className="text-lg font-bold text-gray-800">This transaction is in closed books</h2>
+          <p className="mt-2 text-sm text-gray-500">
+            Books are closed through <span className="font-semibold">{book_closed_through}</span>, so this
+            transaction ({editDetailRaw.date}) is read-only. Record a correction as a new transaction
+            in the open period, or reopen the books from Settings → Book Closing.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="mt-5 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover transition-colors"
+          >
+            Go back
+          </button>
+        </Card>
       </div>
     );
   }

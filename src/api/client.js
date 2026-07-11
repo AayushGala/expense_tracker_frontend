@@ -35,11 +35,29 @@ async function request(method, path, body) {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    const msg = data.detail || data.error || JSON.stringify(data);
-    throw new Error(msg);
+    throw new Error(errorMessage(data) || `Request failed (${res.status})`);
   }
 
   return res.json();
+}
+
+// Normalize DRF error shapes into a readable sentence. Handles plain
+// {detail}/{error} bodies and field-keyed validation errors like
+// {"date": ["Books are closed …"], "amount": ["Required."]}.
+function errorMessage(data) {
+  if (!data || typeof data !== 'object') return null;
+  if (typeof data.detail === 'string') return data.detail;
+  if (typeof data.error === 'string') return data.error;
+
+  const parts = [];
+  for (const [field, value] of Object.entries(data)) {
+    const text = Array.isArray(value) ? value.join(' ') : String(value);
+    if (!text) continue;
+    // Field names are noise when the message is already a sentence.
+    const needsPrefix = field !== 'non_field_errors' && text.length < 40;
+    parts.push(needsPrefix ? `${field}: ${text}` : text);
+  }
+  return parts.join(' ') || null;
 }
 
 // Like request() but returns the raw response body as a Blob (for CSV export).

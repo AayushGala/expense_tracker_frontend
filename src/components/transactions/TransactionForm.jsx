@@ -268,7 +268,7 @@ export default function TransactionForm() {
       date: fromSms.parsed_date ?? new Date().toISOString().slice(0, 10),
       amount: fromSms.parsed_amount ?? '',
       category_id: fromSms.parsed_category ?? '',
-      beneficiary: fromSms.parsed_beneficiary ?? '',
+      beneficiary: '',  // user-only field; the form defaults it to 'self'
       notes: fromSms.body ?? '',
     };
     // parsed_account is the SOURCE side for debits and the DESTINATION side

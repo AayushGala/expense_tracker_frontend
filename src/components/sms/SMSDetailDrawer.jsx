@@ -58,7 +58,9 @@ function initialStateFromSms(sms) {
       from_account_id: String(sms?.parsed_account ?? ''),
       to_account_id: String(sms?.parsed_to_account ?? ''),
       category_id: String(sms?.parsed_category ?? ''),
-      ...deriveBeneficiaryFields(sms?.parsed_beneficiary),
+      // Beneficiary is user-only (parsed_beneficiary holds legacy merchant
+      // strings on old rows) — always start at 'self'.
+      ...deriveBeneficiaryFields(''),
       notes: '',
     },
     errors: {},
@@ -300,7 +302,6 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
             <ParsedRow label="From Account" value={parsedAccountName || '—'} />
             <ParsedRow label="To Account" value={parsedToAccountName || '—'} />
             <ParsedRow label="Category" value={parsedCategoryName || '—'} />
-            <ParsedRow label="Beneficiary" value={sms.parsed_beneficiary || '—'} />
             <ParsedRow label="Date" value={sms.parsed_date || '—'} />
             <ParsedRow label="Confidence" value={sms.parse_confidence || '—'} />
           </dl>

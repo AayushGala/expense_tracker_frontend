@@ -398,6 +398,7 @@ export function DataProvider({ children }) {
   const value = useMemo(() => ({
     ...state,
     loadData,
+    invalidate,
     addTransaction,
     updateTransaction,
     deleteTransaction,
@@ -417,7 +418,7 @@ export function DataProvider({ children }) {
     deleteAccountSubType,
     updateSettings,
   }), [
-    state, loadData,
+    state, loadData, invalidate,
     addTransaction, updateTransaction, deleteTransaction,
     addAccount, updateAccount, deleteAccount,
     addCategory, updateCategory, deleteCategory,

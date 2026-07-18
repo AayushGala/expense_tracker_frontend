@@ -7,7 +7,7 @@ const initialState = {
   accounts: [],
   categories: [],
   // transactions/entries are no longer held in memory — they're server-paginated
-  // and aggregated. budgets are lazy-loaded where needed.
+  // and aggregated.
   receivables: [],
   accountTypes: [],
   settings: {},

@@ -56,8 +56,3 @@ export function csvTimestamp(date = new Date()) {
 }
 
 /** Convenience: build the CSV blob and download it. */
-export function downloadTransactionsCSV(transactions, filename) {
-  const csv = transactionsToCSV(transactions);
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  downloadBlob(blob, filename ?? `transactions-${csvTimestamp()}.csv`);
-}

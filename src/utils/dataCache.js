@@ -54,14 +54,3 @@ export async function writeCachedData(rawPayload) {
     console.warn('dataCache: write failed', err);
   }
 }
-
-export async function clearCachedData() {
-  try {
-    const db = await openDB();
-    await new Promise((resolve) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).clear();
-      tx.oncomplete = () => resolve();
-    });
-  } catch { /* ignore */ }
-}

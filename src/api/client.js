@@ -86,12 +86,6 @@ function qs(params) {
 }
 
 const api = {
-  get: (path) => request('GET', path),
-  post: (path, body) => request('POST', path, body),
-  put: (path, body) => request('PUT', path, body),
-  patch: (path, body) => request('PATCH', path, body),
-  del: (path) => request('DELETE', path),
-
   // Auth
   async login(username, password) {
     const data = await request('POST', '/api/auth/login/', { username, password });
@@ -119,17 +113,12 @@ const api = {
   getBootstrapData: () => request('GET', '/api/data/bootstrap/'),
   getAllData: () => request('GET', '/api/data/all/'),
 
-  // Accounts
-  getAccounts: () => request('GET', '/api/accounts/'),
+  // Accounts (reference data arrives via bootstrap; only mutations here)
   createAccount: (data) => request('POST', '/api/accounts/', data),
   updateAccount: (id, data) => request('PATCH', `/api/accounts/${id}/`, data),
   deleteAccount: (id) => request('DELETE', `/api/accounts/${id}/`),
 
   // Categories
-  getCategories: (params) => {
-    const qs = params ? new URLSearchParams(params).toString() : '';
-    return request('GET', `/api/categories/${qs ? '?' + qs : ''}`);
-  },
   createCategory: (data) => request('POST', '/api/categories/', data),
   updateCategory: (id, data) => request('PATCH', `/api/categories/${id}/`, data),
   deleteCategory: (id) => request('DELETE', `/api/categories/${id}/`),
@@ -164,17 +153,7 @@ const api = {
   getReceivablesRollup: () => request('GET', '/api/receivables/summary/'),
 
   // Receivables
-  getReceivables: (params) => {
-    const qs = params ? new URLSearchParams(params).toString() : '';
-    return request('GET', `/api/receivables/${qs ? '?' + qs : ''}`);
-  },
   updateReceivable: (id, data) => request('PATCH', `/api/receivables/${id}/`, data),
-
-  // Budgets
-  getBudgets: () => request('GET', '/api/budgets/'),
-  createBudget: (data) => request('POST', '/api/budgets/', data),
-  updateBudget: (id, data) => request('PATCH', `/api/budgets/${id}/`, data),
-  deleteBudget: (id) => request('DELETE', `/api/budgets/${id}/`),
 
   // Account Types
   getAccountTypes: () => request('GET', '/api/account-types/'),
@@ -183,16 +162,11 @@ const api = {
   deleteAccountType: (id) => request('DELETE', `/api/account-types/${id}/`),
 
   // Account Sub-Types
-  getAccountSubTypes: (params) => {
-    const qs = params ? new URLSearchParams(params).toString() : '';
-    return request('GET', `/api/account-sub-types/${qs ? '?' + qs : ''}`);
-  },
   createAccountSubType: (data) => request('POST', '/api/account-sub-types/', data),
   updateAccountSubType: (id, data) => request('PATCH', `/api/account-sub-types/${id}/`, data),
   deleteAccountSubType: (id) => request('DELETE', `/api/account-sub-types/${id}/`),
 
-  // Settings
-  getSettings: () => request('GET', '/api/settings/'),
+  // Settings (read via bootstrap; write-only here)
   updateSetting: (key, value) => request('PUT', `/api/settings/${key}/`, { value }),
 
   // Backups
@@ -228,9 +202,8 @@ const api = {
     sinceDays && sinceDays !== 'all' ? { since_days: sinceDays } : {},
   ),
 
-  // Token helpers
+  // Token helpers (setToken stays internal to login/register)
   getToken,
-  setToken,
   clearToken,
 };
 

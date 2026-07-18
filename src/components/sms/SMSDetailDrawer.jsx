@@ -256,7 +256,6 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
     sms.parsed_account != null ||
     sms.parsed_to_account != null ||
     sms.parsed_category != null ||
-    sms.parsed_beneficiary ||
     sms.parsed_date ||
     sms.parse_confidence
   );

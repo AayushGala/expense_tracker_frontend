@@ -133,7 +133,6 @@ describe('valuesFromParsedSms', () => {
       parsed_type: 'bill_payment', parsed_direction: 'debit',
       parsed_amount: '30391.97', parsed_date: '2026-06-04',
       parsed_account: 4, parsed_to_account: 6, parsed_category: null,
-      parsed_beneficiary: 'CRED Club',
     });
     expect(values.type).toBe('bill_payment');
     expect(values.from_account_id).toBe('4');

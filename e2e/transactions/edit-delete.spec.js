@@ -12,7 +12,7 @@ async function createExpense(token, { amount, notes, accountId, categoryId }) {
     },
     body: JSON.stringify({
       type: 'expense',
-      date: '2026-05-17',
+      date: new Date().toISOString().slice(0, 10),
       amount,
       from_account_id: accountId,
       category_id: categoryId,

@@ -27,7 +27,7 @@ test('filter state survives a full page reload', async ({ page }) => {
     method: 'POST',
     headers: { Authorization: `Token ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: 'income', date: '2026-05-17', amount: '5000',
+      type: 'income', date: new Date().toISOString().slice(0, 10), amount: '5000',
       to_account_id: hdfc.id, category_id: salary.id, notes: incNote,
     }),
   });
@@ -35,7 +35,7 @@ test('filter state survives a full page reload', async ({ page }) => {
     method: 'POST',
     headers: { Authorization: `Token ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: 'transfer', date: '2026-05-17', amount: '500',
+      type: 'transfer', date: new Date().toISOString().slice(0, 10), amount: '500',
       from_account_id: hdfc.id, to_account_id: cash.id, notes: xferNote,
     }),
   });

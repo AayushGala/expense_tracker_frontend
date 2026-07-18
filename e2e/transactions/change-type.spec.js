@@ -86,7 +86,7 @@ test('transfer-with-fee → transfer-no-fee drops the fee entry', async ({ page 
     method: 'POST',
     headers: { Authorization: `Token ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: 'transfer', date: '2026-05-17', amount: '1000',
+      type: 'transfer', date: new Date().toISOString().slice(0, 10), amount: '1000',
       from_account_id: hdfc.id, to_account_id: cash.id,
       fee: '18', fee_category_id: surcharges.id,
     }),

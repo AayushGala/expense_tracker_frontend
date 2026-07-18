@@ -31,7 +31,7 @@ test('deleting an expense with refunds is blocked with a friendly error', async 
 
   const expense = await post(token, {
     type: 'expense',
-    date: '2026-05-17',
+    date: new Date().toISOString().slice(0, 10),
     amount: '500',
     from_account_id: hdfc.id,
     category_id: groceries.id,
@@ -39,7 +39,7 @@ test('deleting an expense with refunds is blocked with a friendly error', async 
   });
   await post(token, {
     type: 'income',
-    date: '2026-05-17',
+    date: new Date().toISOString().slice(0, 10),
     amount: '200',
     to_account_id: hdfc.id,
     category_id: refundCat.id,

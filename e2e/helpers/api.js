@@ -54,6 +54,15 @@ async function listAll(path) {
  * to avoid the source_transaction PROTECT cascade refusal.
  */
 export async function resetState() {
+  // Reopen any book-closes first: closed periods make transactions
+  // read-only, which would silently block the deletes below.
+  let closes = await listAll('/api/book-closes/');
+  while (closes.length) {
+    // Only the most recent close is deletable; peel newest-first.
+    await apiFetch(`/api/book-closes/${closes[0].id}/`, { method: 'DELETE' });
+    closes = await listAll('/api/book-closes/');
+  }
+
   const txns = await listAll('/api/transactions/?page_size=500');
   const refunds = txns.filter((t) => t.source_transaction);
   const rest = txns.filter((t) => !t.source_transaction);
@@ -95,11 +104,15 @@ export async function deleteAllBackups() {
   return items;
 }
 
-export async function createExpense({ amount, notes, accountId, categoryId, date = '2026-05-17' }) {
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+export async function createExpense({
+  amount, notes, accountId, categoryId, date = todayISO(), beneficiary = '',
+}) {
   const res = await apiFetch('/api/transactions/', {
     method: 'POST',
     body: JSON.stringify({
-      type: 'expense', date, amount,
+      type: 'expense', date, amount, beneficiary,
       from_account_id: accountId, category_id: categoryId, notes,
     }),
   });
@@ -108,7 +121,7 @@ export async function createExpense({ amount, notes, accountId, categoryId, date
 
 export async function createSplitExpense({
   totalAmount, myShare, accountId, categoryId, receivableAccountId,
-  receivables, date = '2026-05-17', notes = '',
+  receivables, date = todayISO(), notes = '',
 }) {
   const res = await apiFetch('/api/transactions/', {
     method: 'POST',
@@ -123,7 +136,7 @@ export async function createSplitExpense({
   return res.json();
 }
 
-export async function createRefund({ sourceId, amount, toAccountId, categoryId, date = '2026-05-17', notes = '' }) {
+export async function createRefund({ sourceId, amount, toAccountId, categoryId, date = todayISO(), notes = '' }) {
   const res = await apiFetch('/api/transactions/', {
     method: 'POST',
     body: JSON.stringify({
@@ -143,4 +156,16 @@ export async function getTransaction(id) {
 export async function getReceivablesForTransaction(transactionId) {
   const txn = await getTransaction(transactionId);
   return txn.receivables ?? [];
+}
+
+export async function patchSMS(id, data) {
+  const res = await apiFetch(`/api/sms/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function listTransactions() {
+  return listAll('/api/transactions/?page_size=500');
 }

@@ -156,7 +156,6 @@ export function valuesFromParsedSms(sms, today = new Date()) {
     to_account_id: sms.parsed_to_account ? String(sms.parsed_to_account) : '',
     category_id: sms.parsed_category ? String(sms.parsed_category) : '',
     owner: '',
-    // Beneficiary = who the expense is FOR — user-only, never parsed.
     beneficiary: 'self',
     notes: '',
   };

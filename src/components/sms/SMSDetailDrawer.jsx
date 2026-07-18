@@ -58,9 +58,7 @@ function initialStateFromSms(sms) {
       from_account_id: String(sms?.parsed_account ?? ''),
       to_account_id: String(sms?.parsed_to_account ?? ''),
       category_id: String(sms?.parsed_category ?? ''),
-      // Beneficiary is user-only (parsed_beneficiary holds legacy merchant
-      // strings on old rows) — always start at 'self'.
-      ...deriveBeneficiaryFields(''),
+      ...deriveBeneficiaryFields(''),  // beneficiary is user-only; start at 'self'
       notes: '',
     },
     errors: {},

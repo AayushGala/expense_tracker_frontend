@@ -217,6 +217,8 @@ const api = {
   getSMSDevices: () => request('GET', '/api/sms/devices/'),
   getSMSMessage: (id) => request('GET', `/api/sms/${id}/`),
   confirmSMS: (id, body) => request('POST', `/api/sms/${id}/confirm/`, body),
+  linkSMS: (id, transactionId) =>
+    request('POST', `/api/sms/${id}/link/`, { transaction_id: transactionId }),
   reparseSMS: (id) => request('POST', `/api/sms/${id}/reparse/`),
   ignoreSMS: (id) => request('POST', `/api/sms/${id}/ignore/`),
   // sinceDays: number of days back to include (1 = today), or 'all'/undefined

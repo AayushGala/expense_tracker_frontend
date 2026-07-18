@@ -13,6 +13,7 @@ import DateField from '../components/forms/DateField';
 import { inputClass, labelClass } from '../utils/formStyles';
 import { transactionTypeLabel } from '../utils/formatters';
 import { isDateClosed } from '../utils/bookClose';
+import { formatINR } from '../utils/formatters';
 import { effectiveSmsStatus } from '../utils/sms';
 import {
   CONFIRM_TYPES,
@@ -160,6 +161,10 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
   const [txn, setTxn] = useState(null);
   const [values, setValues] = useState(() => (isLinked ? null : valuesFromParsedSms(sms)));
   const [busy, setBusy] = useState(false);
+  // Possible duplicates: same amount+direction ±1 day on any account. The
+  // detail endpoint computes them; dismissing shows the normal confirm form.
+  const [duplicates, setDuplicates] = useState([]);
+  const [dupesDismissed, setDupesDismissed] = useState(false);
   const touch = useRef({ x: 0, y: 0 });
 
   // Linked card: load the transaction and derive editable values from entries.
@@ -173,6 +178,16 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
     }).catch((err) => { if (!cancelled) toast.error(err.message); });
     return () => { cancelled = true; };
   }, [sms.transaction]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Unlinked card: check for possible duplicate transactions.
+  useEffect(() => {
+    if (isLinked) return;
+    let cancelled = false;
+    api.getSMSMessage(sms.id).then((data) => {
+      if (!cancelled) setDuplicates(data.possible_duplicates ?? []);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [sms.id, isLinked]);
 
   const usableAccounts = useMemo(
     () => accounts.filter((a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false),
@@ -228,6 +243,20 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
       const created = await confirmSMS(sms.id, buildConfirmPayload(values));
       toast.success('Transaction created');
       onSmsUpdated({ id: sms.id, status: 'confirmed', transaction: created.id });
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleLink(duplicate) {
+    setBusy(true);
+    try {
+      await api.linkSMS(sms.id, duplicate.id);
+      invalidate();
+      toast.success(`Linked to transaction #${duplicate.id}`);
+      onSmsUpdated({ id: sms.id, status: 'confirmed', transaction: duplicate.id });
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -309,6 +338,40 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
           </div>
         ) : values && (
           <div className="space-y-4">
+            {!isLinked && duplicates.length > 0 && !dupesDismissed && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                <p className="text-xs font-semibold text-amber-800">
+                  Possible duplicate — {duplicates.length === 1 ? 'a transaction' : 'transactions'} with
+                  this amount already {duplicates.length === 1 ? 'exists' : 'exist'}:
+                </p>
+                {duplicates.map((dup) => (
+                  <div key={dup.id} className="flex items-center justify-between gap-2 rounded-lg bg-white border border-amber-100 px-3 py-2">
+                    <div className="min-w-0 text-xs text-gray-600">
+                      <span className="font-semibold text-gray-800">
+                        {formatINR(dup.amount)}
+                      </span>
+                      {' · '}{dup.beneficiary || dup.type}
+                      {dup.account_names?.length > 0 && ` · ${dup.account_names.join(', ')}`}
+                      {' · '}{dup.date}
+                    </div>
+                    <button
+                      onClick={() => handleLink(dup)}
+                      disabled={busy}
+                      className="shrink-0 rounded-lg bg-brand px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                    >
+                      Link to this
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setDupesDismissed(true)}
+                  className="text-xs font-medium text-amber-700 hover:underline"
+                >
+                  It's a different transaction — create a new one
+                </button>
+              </div>
+            )}
+
             {!isLinked && (
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
                 {CONFIRM_TYPES.map((t) => {
@@ -393,13 +456,17 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
             </div>
 
             {!isLinked ? (
-              <button
-                onClick={handleConfirm}
-                disabled={busy}
-                className="w-full rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
-              >
-                {busy ? 'Saving…' : 'Confirm transaction'}
-              </button>
+              // While the duplicate banner is up, Link/dismiss are the choices;
+              // Confirm only returns once the user says it's a new transaction.
+              (duplicates.length === 0 || dupesDismissed) && (
+                <button
+                  onClick={handleConfirm}
+                  disabled={busy}
+                  className="w-full rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                >
+                  {busy ? 'Saving…' : 'Confirm transaction'}
+                </button>
+              )
             ) : (
               <p className="text-center text-[11px] text-gray-400">
                 {busy ? 'Saving…' : 'Changes save automatically'} ·{' '}

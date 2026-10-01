@@ -29,14 +29,8 @@ test('deleting a category that has linked entries shows the rose error inline', 
   await groceriesRow.getByRole('button', { name: /^delete$/i }).click({ force: true });
   await groceriesRow.getByRole('button', { name: /^confirm$/i }).click();
 
-  // Two valid backend error formats depending on whether the first item in
-  // `protected_objects` is a Transaction or Entry (see tracker/exceptions.py:
-  // _describe_protected_objects). The exception handler's noun selection is
-  // sample-based, so the wording can vary across runs. Either is acceptable —
-  // the user-visible requirement is "some error shows up".
-  await expect(
-    page.getByText(/cannot delete — \d+ (refund|entr)/i),
-  ).toBeVisible({ timeout: 10_000 });
+  // Match the meaning, not the exact wording (tracker/exceptions.py owns that).
+  await expect(groceriesRow.getByText(/cannot delete/i)).toBeVisible({ timeout: 10_000 });
 });
 
 test('protected (role-tagged) categories surface a disabled Delete with tooltip', async ({ page }) => {

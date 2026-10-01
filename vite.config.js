@@ -12,6 +12,13 @@ export default defineConfig({
       '/api': 'http://localhost:8000',
     },
   },
+  // `npm start` serves the production build. Same port as dev so phone
+  // bookmarks keep working; the /api proxy is inherited from `server`.
+  preview: {
+    host: true,
+    port: 5173,
+    strictPort: true,
+  },
   build: {
     rollupOptions: {
       output: {

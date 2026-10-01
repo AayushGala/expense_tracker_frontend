@@ -1,6 +1,10 @@
-import { formatINR } from '../../utils/formatters';
+import { formatINR, MASKED_AMOUNT } from '../../utils/formatters';
 
-export default function AmountDisplay({ amount, variant = 'neutral', showSign = false, className = '' }) {
+export default function AmountDisplay({ amount, variant = 'neutral', showSign = false, hidden = false, className = '' }) {
+  if (hidden) {
+    return <span className={`font-semibold tabular-nums text-gray-400 ${className}`}>{MASKED_AMOUNT}</span>;
+  }
+
   const colorClass =
     variant === 'income'
       ? 'text-accent'

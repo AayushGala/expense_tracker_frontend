@@ -15,6 +15,9 @@ export function formatINR(amount) {
   return inrFormatter.format(num);
 }
 
+// Shown in place of an amount while useHideAmounts is on.
+export const MASKED_AMOUNT = '₹ ••••••';
+
 const DATE_FORMAT_OPTIONS = { day: '2-digit', month: 'short', year: 'numeric' };
 
 export function formatDate(dateStr) {

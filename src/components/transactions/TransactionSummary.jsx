@@ -1,6 +1,8 @@
-import { formatINR } from '../../utils/formatters';
+import { formatINR, MASKED_AMOUNT as MASK } from '../../utils/formatters';
+import { useHideAmounts } from '../../hooks/useHideAmounts';
+import HideAmountsToggle from '../common/HideAmountsToggle';
 
-function StatBlock({ label, value, variant = 'neutral', format = 'currency' }) {
+function StatBlock({ label, value, variant = 'neutral', format = 'currency', hidden = false }) {
   const colorClass =
     variant === 'outflow'
       ? 'text-gray-900'
@@ -10,27 +12,30 @@ function StatBlock({ label, value, variant = 'neutral', format = 'currency' }) {
       ? 'text-gray-900'
       : 'text-gray-500';
 
-  const display = format === 'currency' ? formatINR(value) : value;
+  const masked = hidden && format === 'currency';
+  const display = masked ? MASK : format === 'currency' ? formatINR(value) : value;
 
   return (
     <div className="flex flex-col">
       <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">{label}</p>
-      <p className={`text-lg font-bold tabular-nums mt-0.5 ${colorClass}`}>{display}</p>
+      <p className={`text-lg font-bold tabular-nums mt-0.5 ${masked ? 'text-gray-400' : colorClass}`}>{display}</p>
     </div>
   );
 }
 
-function MovementPill({ icon, count, label, amount }) {
+function MovementPill({ icon, count, label, amount, hidden }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600">
       <span aria-hidden>{icon}</span>
       <span className="font-medium">{count} {label}{count === 1 ? '' : 's'}</span>
-      <span className="text-gray-400 tabular-nums">{formatINR(amount)}</span>
+      <span className="text-gray-400 tabular-nums">{hidden ? MASK : formatINR(amount)}</span>
     </span>
   );
 }
 
 export default function TransactionSummary({ summary, isLoading, splitMode, onSplitModeChange }) {
+  const [hidden, toggleHidden] = useHideAmounts();
+
   if (isLoading && !summary) {
     return (
       <div className="px-5 py-4 text-xs text-gray-400">Calculating totals...</div>
@@ -46,11 +51,14 @@ export default function TransactionSummary({ summary, isLoading, splitMode, onSp
   ].filter((m) => (m.count ?? 0) > 0);
 
   return (
-    <div className="px-5 py-4 space-y-3">
+    <div className="relative px-5 py-4 space-y-3">
+      <div className="absolute right-5 top-4">
+        <HideAmountsToggle hidden={hidden} onToggle={toggleHidden} />
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatBlock label="Spent" value={summary.total_outflow} variant="outflow" />
-        <StatBlock label="Received" value={summary.total_inflow} variant="inflow" />
-        <StatBlock label="Net" value={summary.net} variant="net" />
+        <StatBlock label="Spent" value={summary.total_outflow} variant="outflow" hidden={hidden} />
+        <StatBlock label="Received" value={summary.total_inflow} variant="inflow" hidden={hidden} />
+        <StatBlock label="Net" value={summary.net} variant="net" hidden={hidden} />
         <StatBlock label="Count" value={summary.count} format="plain" />
       </div>
 
@@ -98,6 +106,7 @@ export default function TransactionSummary({ summary, isLoading, splitMode, onSp
                   count={m.count}
                   label={m.label}
                   amount={m.amount}
+                  hidden={hidden}
                 />
               ))}
             </div>

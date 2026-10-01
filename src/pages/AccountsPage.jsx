@@ -1,13 +1,15 @@
 import { useState, useMemo } from 'react';
 import { useAccounts } from '../hooks/useAccounts';
+import { useHideAmounts } from '../hooks/useHideAmounts';
 import { useApiResource } from '../hooks/useApiResource';
 import api from '../api/client';
 import { useOwners } from '../hooks/useOwners';
 import { useData } from '../context/DataContext';
-import { formatINR } from '../utils/formatters';
+import { formatINR, MASKED_AMOUNT } from '../utils/formatters';
 import { sum, ZERO } from '../utils/money';
 import Card from '../components/common/Card';
 import AmountDisplay from '../components/common/AmountDisplay';
+import HideAmountsToggle from '../components/common/HideAmountsToggle';
 import EmptyState from '../components/common/EmptyState';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Modal from '../components/common/Modal';
@@ -161,7 +163,7 @@ function AccountIcon({ type, subType }) {
   );
 }
 
-function AccountCard({ account, balance, onClick }) {
+function AccountCard({ account, balance, hidden, onClick }) {
   return (
     <Card
       onClick={() => onClick(account)}
@@ -187,6 +189,7 @@ function AccountCard({ account, balance, onClick }) {
         variant={
           account.type === 'asset' || account.type === 'receivable' ? 'income' : 'expense'
         }
+        hidden={hidden}
         className="text-base font-bold flex-shrink-0"
       />
     </Card>
@@ -197,7 +200,7 @@ function AccountCard({ account, balance, onClick }) {
 // AccountSection — titled group of accounts
 // ---------------------------------------------------------------------------
 
-function AccountSection({ title, accounts, getBalance, onAccountClick, balanceSummary }) {
+function AccountSection({ title, accounts, getBalance, onAccountClick, balanceSummary, hidden }) {
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
@@ -206,7 +209,7 @@ function AccountSection({ title, accounts, getBalance, onAccountClick, balanceSu
           <span className="text-xs font-medium text-gray-400">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
         </div>
         {balanceSummary !== undefined && (
-          <AmountDisplay amount={balanceSummary} className="text-sm font-bold" />
+          <AmountDisplay amount={balanceSummary} hidden={hidden} className="text-sm font-bold" />
         )}
       </div>
 
@@ -221,6 +224,7 @@ function AccountSection({ title, accounts, getBalance, onAccountClick, balanceSu
               key={account.id}
               account={account}
               balance={getBalance(account.id)}
+              hidden={hidden}
               onClick={onAccountClick}
             />
           ))}
@@ -238,6 +242,7 @@ export default function AccountsPage() {
   const { isLoading, dataVersion } = useData();
   const { accountsByType, getAccountBalance } = useAccounts();
   const { owners, ownerOptions } = useOwners();
+  const [hideAmounts, toggleHideAmounts] = useHideAmounts();
 
   const [ledgerAccount, setLedgerAccount] = useState(null); // account object | null
   const [selectedTxn, setSelectedTxn] = useState(null);
@@ -331,26 +336,30 @@ export default function AccountsPage() {
             <p className="text-[11px] text-gray-400 mb-1.5 uppercase tracking-wider font-semibold">
               Total Assets
             </p>
-            <AmountDisplay amount={assetTotal} variant="income" className="text-xl font-bold" />
+            <AmountDisplay amount={assetTotal} variant="income" hidden={hideAmounts} className="text-xl font-bold" />
           </div>
           <div className="p-5">
             <p className="text-[11px] text-gray-400 mb-1.5 uppercase tracking-wider font-semibold">
               Total Liabilities
             </p>
-            <AmountDisplay amount={liabilityTotal} variant="expense" className="text-xl font-bold" />
+            <AmountDisplay amount={liabilityTotal} variant="expense" hidden={hideAmounts} className="text-xl font-bold" />
           </div>
           <div className="p-5">
             <p className="text-[11px] text-gray-400 mb-1.5 uppercase tracking-wider font-semibold">
               Receivables
             </p>
-            <AmountDisplay amount={receivableTotal} className="text-xl font-bold" />
+            <AmountDisplay amount={receivableTotal} hidden={hideAmounts} className="text-xl font-bold" />
           </div>
           <div className="p-5 bg-gray-50/50">
-            <p className="text-[11px] text-gray-400 mb-1.5 uppercase tracking-wider font-semibold">
-              Net Worth
-            </p>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold">
+                Net Worth
+              </p>
+              <HideAmountsToggle hidden={hideAmounts} onToggle={toggleHideAmounts} />
+            </div>
             <AmountDisplay
               amount={assetTotal + receivableTotal - liabilityTotal}
+              hidden={hideAmounts}
               className="text-xl font-bold"
             />
           </div>
@@ -366,6 +375,7 @@ export default function AccountsPage() {
           getBalance={getAccountBalance}
           onAccountClick={handleAccountClick}
           balanceSummary={sectionTotals[key]}
+          hidden={hideAmounts}
         />
       ))}
 
@@ -383,7 +393,7 @@ export default function AccountsPage() {
               <div>
                 <p className="text-[11px] text-brand-muted font-medium uppercase tracking-wider">Current Balance</p>
                 <p className="text-2xl font-bold text-white tabular-nums mt-1">
-                  {formatINR(getAccountBalance(ledgerAccount.id).abs())}
+                  {hideAmounts ? MASKED_AMOUNT : formatINR(getAccountBalance(ledgerAccount.id).abs())}
                 </p>
               </div>
               <div className="text-right">

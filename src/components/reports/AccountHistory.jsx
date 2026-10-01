@@ -15,14 +15,16 @@ import { useAccounts } from '../../hooks/useAccounts';
 import { useApiResource } from '../../hooks/useApiResource';
 import api from '../../api/client';
 import { useData } from '../../context/DataContext';
-import { formatINR, formatDate } from '../../utils/formatters';
+import { formatINR, formatDate, MASKED_AMOUNT } from '../../utils/formatters';
+import { useHideAmounts } from '../../hooks/useHideAmounts';
+import HideAmountsToggle from '../common/HideAmountsToggle';
 
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload, label, hidden }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-md px-4 py-2 text-sm">
       <p className="font-medium text-gray-700 mb-1">{label}</p>
-      <p className="text-accent font-semibold">{formatINR(payload[0].value)}</p>
+      <p className="text-accent font-semibold">{hidden ? MASKED_AMOUNT : formatINR(payload[0].value)}</p>
     </div>
   );
 }
@@ -32,6 +34,7 @@ export default function AccountHistory() {
   const { dataVersion } = useData();
 
   const [selectedAccountId, setSelectedAccountId] = useState(accounts[0]?.id ?? '');
+  const [hidden, toggleHidden] = useHideAmounts();
 
   const { data: ledgerData } = useApiResource(
     () => api.getAccountLedger(selectedAccountId),
@@ -71,6 +74,7 @@ export default function AccountHistory() {
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3 min-h-[44px]">
         <h2 className="text-base font-bold text-gray-900 flex-1">Account History</h2>
+        <HideAmountsToggle hidden={hidden} onToggle={toggleHidden} />
         <Dropdown
           value={selectedAccountId}
           onChange={setSelectedAccountId}
@@ -88,18 +92,18 @@ export default function AccountHistory() {
         <Card className="p-4">
           <p className="text-xs text-gray-500">Current Balance</p>
           <p className={`text-base font-bold mt-0.5 ${currentBalance >= 0 ? 'text-gray-900' : 'text-gray-800'}`}>
-            {formatINR(currentBalance)}
+            {hidden ? MASKED_AMOUNT : formatINR(currentBalance)}
           </p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-gray-500">Lowest Balance</p>
           <p className={`text-base font-bold mt-0.5 ${minBalance >= 0 ? 'text-gray-900' : 'text-gray-800'}`}>
-            {formatINR(minBalance)}
+            {hidden ? MASKED_AMOUNT : formatINR(minBalance)}
           </p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-gray-500">Highest Balance</p>
-          <p className="text-base font-bold text-gray-900 mt-0.5">{formatINR(maxBalance)}</p>
+          <p className="text-base font-bold text-gray-900 mt-0.5">{hidden ? MASKED_AMOUNT : formatINR(maxBalance)}</p>
         </Card>
       </div>
 
@@ -127,10 +131,10 @@ export default function AccountHistory() {
                 tick={{ fontSize: 11, fill: '#6b7280' }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
+                tickFormatter={(v) => (hidden ? '' : `₹${(v / 1000).toFixed(0)}k`)}
                 width={52}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltip hidden={hidden} />} />
               {minBalance < 0 && <ReferenceLine y={0} stroke="#1e2a30" strokeDasharray="4 4" />}
               <Line
                 type="stepAfter"
@@ -162,7 +166,7 @@ export default function AccountHistory() {
                   <p className={`text-sm font-semibold ${entry.entry_type === 'DEBIT' ? 'text-accent' : 'text-gray-800'}`}>
                     {entry.entry_type === 'DEBIT' ? '-' : '+'}{formatINR(entry.amount)}
                   </p>
-                  <p className="text-xs text-gray-400">Bal: {formatINR(entry.runningBalance)}</p>
+                  <p className="text-xs text-gray-400">Bal: {hidden ? MASKED_AMOUNT : formatINR(entry.runningBalance)}</p>
                 </div>
               </div>
             ))}

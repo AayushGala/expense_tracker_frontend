@@ -4,7 +4,8 @@ import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
 import Card from '../common/Card';
 import CalendarPicker from '../common/CalendarPicker';
-import { formatDate, formatINR } from '../../utils/formatters';
+import { formatDate, formatINR, MASKED_AMOUNT } from '../../utils/formatters';
+import { useHideAmounts } from '../../hooks/useHideAmounts';
 import { inputClass, labelClass } from '../../utils/formStyles';
 import { lastMonthEnd } from '../../utils/bookClose';
 
@@ -16,6 +17,7 @@ import { lastMonthEnd } from '../../utils/bookClose';
 export default function BookCloseManager() {
   const { book_closed_through, loadData } = useData();
   const toast = useToast();
+  const [hideAmounts] = useHideAmounts();
 
   const [closes, setCloses] = useState([]);
   const [closeDate, setCloseDate] = useState(lastMonthEnd());
@@ -131,7 +133,7 @@ export default function BookCloseManager() {
                     )}
                   </p>
                   <p className="text-[11px] text-gray-400 mt-0.5">
-                    Net worth {formatINR(close.net_worth)} · closed {formatDate(close.created_at)}
+                    Net worth {hideAmounts ? MASKED_AMOUNT : formatINR(close.net_worth)} · closed {formatDate(close.created_at)}
                     {close.notes ? ` · ${close.notes}` : ''}
                   </p>
                 </div>

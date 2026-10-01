@@ -14,6 +14,7 @@ import {
   Legend,
 } from 'recharts';
 import { useAccounts } from '../hooks/useAccounts';
+import { useHideAmounts } from '../hooks/useHideAmounts';
 import { useOwners } from '../hooks/useOwners';
 import { useMonthlySpending, useCategoryBreakdown, useReceivablesRollup } from '../hooks/useReportData';
 import { useData } from '../context/DataContext';
@@ -21,6 +22,7 @@ import { useTransactions } from '../hooks/useTransactions';
 import Card from '../components/common/Card';
 import Badge from '../components/common/Badge';
 import AmountDisplay from '../components/common/AmountDisplay';
+import HideAmountsToggle from '../components/common/HideAmountsToggle';
 import EmptyState from '../components/common/EmptyState';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { formatDate, formatINR, transactionTypeLabel } from '../utils/formatters';
@@ -108,29 +110,33 @@ function NetWorthCard({ accountsByType, balances, netWorth }) {
   const totalAssets     = totalOf(accountsByType.asset ?? []);
   const totalReceivable = totalOf(accountsByType.receivable ?? []);
   const totalLiability  = totalOf(accountsByType.liability ?? []);
+  const [hidden, toggleHidden] = useHideAmounts();
 
   return (
     <Card className="p-6 flex flex-col gap-4">
-      <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-        Net Worth
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+          Net Worth
+        </h3>
+        <HideAmountsToggle hidden={hidden} onToggle={toggleHidden} />
+      </div>
 
       <div className="flex items-end gap-2">
-        <AmountDisplay amount={netWorth} className="text-3xl font-bold" />
+        <AmountDisplay amount={netWorth} hidden={hidden} className="text-3xl font-bold" />
       </div>
 
       <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
         <div>
           <p className="text-[11px] text-gray-400 mb-0.5 font-medium">Assets</p>
-          <AmountDisplay amount={totalAssets} variant="income" className="text-sm font-bold" />
+          <AmountDisplay amount={totalAssets} variant="income" hidden={hidden} className="text-sm font-bold" />
         </div>
         <div>
           <p className="text-[11px] text-gray-400 mb-0.5 font-medium">Liabilities</p>
-          <AmountDisplay amount={totalLiability} variant="expense" className="text-sm font-bold" />
+          <AmountDisplay amount={totalLiability} variant="expense" hidden={hidden} className="text-sm font-bold" />
         </div>
         <div>
           <p className="text-[11px] text-gray-400 mb-0.5 font-medium">Receivable</p>
-          <AmountDisplay amount={totalReceivable} className="text-sm font-bold" />
+          <AmountDisplay amount={totalReceivable} hidden={hidden} className="text-sm font-bold" />
         </div>
       </div>
     </Card>

@@ -289,7 +289,9 @@ export default function AccountsPage() {
     [ledgerAccount?.id, dataVersion ?? 0],
     { skip: !ledgerAccount },
   );
-  const ledgerEntries = ledgerData?.entries ?? [];
+  // Server sends oldest-first (it accumulates the running balance in that
+  // order); show newest first.
+  const ledgerEntries = useMemo(() => [...(ledgerData?.entries ?? [])].reverse(), [ledgerData]);
 
   // -------------------------------------------------------------------------
   // Handlers

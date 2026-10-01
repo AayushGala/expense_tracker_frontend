@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
 import { useOwners } from '../../hooks/useOwners';
@@ -192,10 +192,20 @@ function valuesFromInitialData(initialData, ctx = {}) {
 
 export default function TransactionForm() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const refundOfId = searchParams.get('refund_of');
   const fromSmsId = searchParams.get('from_sms');
+
+  // Return to the exact view the form was opened from (filters, page) on
+  // save and cancel alike. key 'default' means the form is the first entry
+  // of this tab's history (opened via a direct link), so there is nothing
+  // in-app to go back to.
+  function goBack() {
+    if (location.key !== 'default') navigate(-1);
+    else navigate(fromSmsId ? '/sms' : '/transactions');
+  }
   const {
     accounts, categories, receivables,
     addTransaction, updateTransaction, book_closed_through,
@@ -349,7 +359,7 @@ export default function TransactionForm() {
         await addTransaction(payload);
         toast.success(fromSmsId ? 'Transaction created and SMS confirmed' : 'Transaction saved');
       }
-      navigate(fromSmsId ? '/sms' : '/transactions');
+      goBack();
     } catch (err) {
       console.error('TransactionForm: submit failed', err);
       toast.error(err.message || 'Failed to save transaction.');
@@ -401,7 +411,7 @@ export default function TransactionForm() {
           </p>
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={goBack}
             className="mt-5 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover transition-colors"
           >
             Go back
@@ -416,7 +426,7 @@ export default function TransactionForm() {
       {/* Back link */}
       <button
         type="button"
-        onClick={() => navigate(-1)}
+        onClick={goBack}
         className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-600 transition-colors mb-4"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -436,7 +446,7 @@ export default function TransactionForm() {
           </p>
         </div>
         <button
-          onClick={() => navigate(-1)}
+          onClick={goBack}
           className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
         >
           Cancel

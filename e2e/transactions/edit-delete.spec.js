@@ -60,6 +60,31 @@ test('edit an existing transaction via the UI', async ({ page }) => {
   expect(Number(credit.amount)).toBe(999);
 });
 
+test('saving an edit returns to the filtered list it was opened from', async ({ page }) => {
+  const note = `e2e-edit-filtered-${Date.now()}`;
+  const token = await getToken();
+  const accounts = await getAccounts();
+  const categories = await getCategories();
+  const hdfc = accounts.find((a) => a.name === 'HDFC Savings');
+  const groceries = categories.find((c) => c.name === 'Groceries');
+  await createExpense(token, {
+    amount: '500',
+    notes: note,
+    accountId: hdfc.id,
+    categoryId: groceries.id,
+  });
+
+  await page.goto(`/transactions?types=expense&search=${note}`);
+  await page.getByRole('table').getByText(note).click();
+  await page.getByRole('button', { name: /^edit$/i }).click();
+  await page.getByLabel('Amount').fill('999');
+  await page.getByRole('button', { name: /update expense/i }).click();
+
+  await expect(page.getByText(/transaction updated/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(new RegExp(`/transactions\\?types=expense&search=${note}$`));
+  await expect(page.getByRole('table').getByText(note)).toBeVisible();
+});
+
 test('delete a transaction via the UI', async ({ page }) => {
   const note = `e2e-delete-${Date.now()}`;
   const token = await getToken();

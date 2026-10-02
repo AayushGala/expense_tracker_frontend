@@ -34,6 +34,18 @@ export function useCashflow(filters = {}, months = 12) {
   return { data: data?.data ?? [], isLoading, error };
 }
 
+export function useMonthReview(filters = {}, month) {
+  const { params, key } = useReportParams(filters, { month });
+  const { data, isLoading, error } = useApiResource(() => api.getMonthReview(params), [key]);
+  return { data, isLoading, error };
+}
+
+export function useCategoryInsights(categoryId, filters = {}, months = 12, month) {
+  const { params, key } = useReportParams(filters, { category: categoryId, months, month });
+  const { data, isLoading, error } = useApiResource(() => api.getCategoryInsights(params), [key]);
+  return { data, isLoading, error };
+}
+
 export function useCategoryBreakdown(filters = {}, month) {
   const { params, key } = useReportParams(filters, month ? { month } : {});
   const { data, isLoading, error } = useApiResource(() => api.getCategoryBreakdown(params), [key]);

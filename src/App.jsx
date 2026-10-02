@@ -18,6 +18,7 @@ const DashboardPage   = lazy(() => import('./pages/DashboardPage'))
 const TransactionsPage = lazy(() => import('./pages/TransactionsPage'))
 const AccountsPage    = lazy(() => import('./pages/AccountsPage'))
 const ReportsPage     = lazy(() => import('./pages/ReportsPage'))
+const CategoryInsightsPage = lazy(() => import('./pages/CategoryInsightsPage'))
 const SettingsPage    = lazy(() => import('./pages/SettingsPage'))
 const SMSPage         = lazy(() => import('./pages/SMSPage'))
 const SMSReviewPage   = lazy(() => import('./pages/SMSReviewPage'))
@@ -111,6 +112,7 @@ export default function App() {
                               <Route path="/transactions/:id/edit" element={<TransactionForm />} />
                               <Route path="/accounts" element={<AccountsPage />} />
                               <Route path="/reports" element={<ReportsPage />} />
+                              <Route path="/reports/categories/:id" element={<CategoryInsightsPage />} />
                               <Route path="/sms" element={<SMSPage />} />
                               <Route path="/sms/review" element={<SMSReviewPage />} />
                               <Route path="/settings" element={<SettingsPage />} />

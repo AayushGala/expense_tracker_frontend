@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import MonthReview from '../components/reports/MonthReview';
 import SpendingTrends from '../components/reports/SpendingTrends';
 import CashflowReport from '../components/reports/CashflowReport';
 import AccountHistory from '../components/reports/AccountHistory';
 import ReceivablesReport from '../components/reports/ReceivablesReport';
 
 const TABS = [
+  { id: 'review',      label: 'Month in Review' },
   { id: 'spending',    label: 'Spending' },
   { id: 'cashflow',   label: 'Cashflow' },
   { id: 'account',    label: 'Account History' },
@@ -12,7 +14,7 @@ const TABS = [
 ];
 
 export default function ReportsPage() {
-  const [activeTab, setActiveTab] = useState('spending');
+  const [activeTab, setActiveTab] = useState('review');
 
   return (
     <div className="space-y-6">
@@ -41,6 +43,7 @@ export default function ReportsPage() {
 
       {/* Tab panels — hidden keeps components mounted to preserve state */}
       <div className="-mt-2">
+        <div className={activeTab !== 'review'      ? 'hidden' : ''}><MonthReview /></div>
         <div className={activeTab !== 'spending'    ? 'hidden' : ''}><SpendingTrends /></div>
         <div className={activeTab !== 'cashflow'    ? 'hidden' : ''}><CashflowReport /></div>
         <div className={activeTab !== 'account'     ? 'hidden' : ''}><AccountHistory /></div>

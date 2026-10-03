@@ -1,17 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { useHideAmounts } from './useHideAmounts';
+import { useHideAmounts, __resetHideAmountsForTests } from './useHideAmounts';
 
 describe('useHideAmounts', () => {
+  let store;
+
   // The test env's global localStorage is Node's non-functional stub, so
   // swap in an in-memory one.
   beforeEach(() => {
-    const store = new Map();
+    store = new Map();
     vi.stubGlobal('localStorage', {
       getItem: (k) => store.get(k) ?? null,
       setItem: (k, v) => store.set(k, String(v)),
       removeItem: (k) => store.delete(k),
     });
+    __resetHideAmountsForTests();
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -20,17 +23,24 @@ describe('useHideAmounts', () => {
     expect(result.current[0]).toBe(false);
   });
 
-  it('remembers hidden across remounts (reload)', () => {
-    const first = renderHook(() => useHideAmounts());
-    act(() => first.result.current[1]());
-    expect(first.result.current[0]).toBe(true);
-    first.unmount();
+  it('persists to storage and is read back on a fresh load', () => {
+    const { result } = renderHook(() => useHideAmounts());
+    act(() => result.current[1]());
+    expect(result.current[0]).toBe(true);
+    expect(store.get('hideAmounts')).toBe('1');
 
-    const second = renderHook(() => useHideAmounts());
-    expect(second.result.current[0]).toBe(true);
+    // A reload re-reads storage.
+    __resetHideAmountsForTests();
+    expect(renderHook(() => useHideAmounts()).result.current[0]).toBe(true);
 
-    act(() => second.result.current[1]());
-    second.unmount();
-    expect(renderHook(() => useHideAmounts()).result.current[0]).toBe(false);
+    act(() => result.current[1]());
+    expect(store.has('hideAmounts')).toBe(false);
+  });
+
+  it('keeps every mounted user in sync', () => {
+    const netWorthCard = renderHook(() => useHideAmounts());
+    const thisMonthCard = renderHook(() => useHideAmounts());
+    act(() => netWorthCard.result.current[1]());
+    expect(thisMonthCard.result.current[0]).toBe(true);
   });
 });

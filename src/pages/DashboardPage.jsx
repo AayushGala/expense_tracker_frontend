@@ -1,32 +1,25 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useUrlFilters } from '../hooks/useUrlFilters';
 import { sum, ZERO } from '../utils/money';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from 'recharts';
 import { useAccounts } from '../hooks/useAccounts';
 import { useHideAmounts } from '../hooks/useHideAmounts';
 import { useOwners } from '../hooks/useOwners';
-import { useMonthlySpending, useCategoryBreakdown, useReceivablesRollup } from '../hooks/useReportData';
+import { useMonthReview } from '../hooks/useReportData';
+import { useApiResource } from '../hooks/useApiResource';
 import { useData } from '../context/DataContext';
 import { useTransactions } from '../hooks/useTransactions';
+import api from '../api/client';
 import Card from '../components/common/Card';
 import Badge from '../components/common/Badge';
 import AmountDisplay from '../components/common/AmountDisplay';
 import HideAmountsToggle from '../components/common/HideAmountsToggle';
 import EmptyState from '../components/common/EmptyState';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import { formatDate, formatINR, transactionTypeLabel } from '../utils/formatters';
+import { formatDate, formatINR, MASKED_AMOUNT, transactionTypeLabel } from '../utils/formatters';
 import TypeIcon, { getVariant } from '../components/common/TypeIcon';
+import { drilldownPath } from '../components/reports/MonthReview';
+import { ChangeChip, PACE_MIN_DAY, currentMonthKey } from '../components/reports/insightsUi';
 
 const DASHBOARD_FILTER_SCHEMA = {
   beneficiary: {},
@@ -39,12 +32,6 @@ const DASHBOARD_DEFAULTS = { beneficiary: 'All', owner: 'All' };
 // ---------------------------------------------------------------------------
 
 const BENEFICIARY_OPTIONS = ['All', 'Self', 'Family'];
-
-const PIE_COLORS = [
-  '#1e2a30', '#2cbcac', '#7c9ea6', '#c5f1ec',
-  '#4a6670', '#a8d8d0', '#34495e', '#5dade2',
-  '#85929e', '#48c9b0', '#2c3e50', '#76d7c4',
-];
 
 // ---------------------------------------------------------------------------
 // Beneficiary toggle
@@ -144,152 +131,119 @@ function NetWorthCard({ accountsByType, balances, netWorth }) {
 }
 
 // ---------------------------------------------------------------------------
-// MonthlySpendingChart
+// ThisMonthCard — the top of Month in Review, at a glance
 // ---------------------------------------------------------------------------
 
-function MonthlySpendingChart({ data, isLoading }) {
-  if (isLoading) {
-    return (
-      <Card className="p-6 flex flex-col gap-3">
-        <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-          Monthly Spending — Last 6 Months
-        </h3>
-        <div className="h-[200px] flex items-center justify-center">
-          <LoadingSpinner size="h-8 w-8" />
-        </div>
-      </Card>
-    );
-  }
-  if (!data || data.every((d) => d.total === 0)) {
-    return (
-      <Card className="p-6 flex flex-col gap-3">
-        <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-          Monthly Spending
-        </h3>
-        <EmptyState
-          message="No spending data yet"
-          description="Add some expense transactions to see your chart."
-          className="py-10"
-        />
-      </Card>
-    );
-  }
+const TOP_RISES = 3;
 
-  const chartData = data.map((d) => ({
-    ...d,
-    label: new Date(d.month + '-02').toLocaleDateString('en-IN', { month: 'short' }),
-  }));
+function ThisMonthCard({ filters }) {
+  const navigate = useNavigate();
+  const [hidden] = useHideAmounts();
+  const month = currentMonthKey();
+  const { data, isLoading } = useMonthReview(filters, month);
+  const money = (v) => (hidden ? MASKED_AMOUNT : formatINR(v));
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null;
-    return (
-      <div className="rounded-xl bg-white ring-1 ring-gray-200 shadow-lg px-3 py-2 text-sm">
-        <p className="font-semibold text-gray-700 mb-0.5">{label}</p>
-        <p className="text-accent font-bold">{formatINR(payload[0].value)}</p>
-      </div>
-    );
-  };
+  const rises = useMemo(
+    () => (data?.categories ?? [])
+      .filter((c) => c.change != null && Number(c.change) > 0)
+      .sort((a, b) => Number(b.change) - Number(a.change))
+      .slice(0, TOP_RISES),
+    [data],
+  );
+
+  const avgSpent = data?.average?.spent;
+  const projected = data?.pace?.day >= PACE_MIN_DAY ? data.pace.projected_spent : null;
 
   return (
-    <Card className="p-6 flex flex-col gap-3">
-      <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-        Monthly Spending — Last 6 Months
-      </h3>
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-          <XAxis
-            dataKey="label"
-            tick={{ fontSize: 12, fill: '#9ca3af' }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
-            tick={{ fontSize: 11, fill: '#9ca3af' }}
-            axisLine={false}
-            tickLine={false}
-            width={48}
-          />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
-          <Bar dataKey="total" fill="#1e2a30" radius={[8, 8, 0, 0]} maxBarSize={48} />
-        </BarChart>
-      </ResponsiveContainer>
+    <Card className="p-6 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">This month</h3>
+        <Link to="/reports" className="text-xs font-semibold text-accent hover:underline">Month in Review</Link>
+      </div>
+
+      {isLoading && !data ? (
+        <div className="py-6 flex justify-center"><LoadingSpinner size="h-6 w-6" /></div>
+      ) : (
+        <>
+          <div>
+            <p className={`text-3xl font-bold tabular-nums ${hidden ? 'text-gray-400' : 'text-gray-900'}`}>
+              {money(data?.totals.spent ?? 0)}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              spent so far
+              {data?.pace && <> · day {data.pace.day} of {data.pace.days_in_month}</>}
+            </p>
+          </div>
+
+          {projected != null && avgSpent != null && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gray-50 px-3 py-2.5">
+              <p className="text-xs text-gray-600">
+                On track for <span className="font-semibold text-gray-900">{money(projected)}</span>
+                <span className="text-gray-400"> · usual {money(avgSpent)}</span>
+              </p>
+              <ChangeChip
+                change={Number(projected) - Number(avgSpent)}
+                pct={Number(avgSpent) > 0 ? ((projected - avgSpent) / avgSpent) * 100 : null}
+                compact
+              />
+            </div>
+          )}
+
+          {rises.length > 0 && (
+            <div className="pt-3 border-t border-gray-100">
+              <p className="text-[11px] text-gray-400 mb-1 font-medium">Up against your average</p>
+              <div className="divide-y divide-gray-50">
+                {rises.map((c) => (
+                  <button
+                    key={c.category_id}
+                    type="button"
+                    onClick={() => navigate(drilldownPath(c.category_id, { ...filters, month }))}
+                    className="w-full flex items-center justify-between gap-3 py-2 text-left group"
+                  >
+                    <span className="text-[13px] font-medium text-gray-700 truncate group-hover:text-brand group-hover:underline">{c.name}</span>
+                    <ChangeChip change={c.change} pct={c.change_pct} compact />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </Card>
   );
 }
 
 // ---------------------------------------------------------------------------
-// CategoryPieChart
+// SmsToReview — nudge while parsed SMS wait for confirmation
 // ---------------------------------------------------------------------------
 
-function CategoryPieChart({ data, isLoading }) {
-  if (isLoading) {
-    return (
-      <Card className="p-6 flex flex-col gap-3">
-        <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-          This Month by Category
-        </h3>
-        <div className="h-[240px] flex items-center justify-center">
-          <LoadingSpinner size="h-8 w-8" />
-        </div>
-      </Card>
-    );
-  }
-  if (!data || data.length === 0) {
-    return (
-      <Card className="p-6 flex flex-col gap-3">
-        <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-          This Month by Category
-        </h3>
-        <EmptyState
-          message="No category data"
-          description="Add expense transactions this month to see the breakdown."
-          className="py-10"
-        />
-      </Card>
-    );
-  }
+const TO_REVIEW_STATUSES = ['pending', 'parsed', 'failed'];
 
-  const CustomTooltip = ({ active, payload }) => {
-    if (!active || !payload?.length) return null;
-    return (
-      <div className="rounded-xl bg-white ring-1 ring-gray-200 shadow-lg px-3 py-2 text-sm">
-        <p className="font-semibold text-gray-700">{payload[0].name}</p>
-        <p className="text-accent font-bold">{formatINR(payload[0].value)}</p>
-      </div>
-    );
-  };
+function SmsToReview() {
+  const { dataVersion } = useData();
+  const { data } = useApiResource(() => {
+    const params = new URLSearchParams({ page_size: '1' });
+    for (const s of TO_REVIEW_STATUSES) params.append('status', s);
+    return api.getSMSMessages(params);
+  }, [dataVersion ?? 0]);
+  const count = data?.count ?? 0;
+  if (count === 0) return null;
 
   return (
-    <Card className="p-6 flex flex-col gap-3">
-      <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-        This Month by Category
-      </h3>
-      <ResponsiveContainer width="100%" height={240}>
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="total"
-            nameKey="categoryName"
-            cx="50%"
-            cy="50%"
-            outerRadius={80}
-            innerRadius={40}
-            paddingAngle={2}
-          >
-            {data.map((_, i) => (
-              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-            ))}
-          </Pie>
-          <Tooltip content={<CustomTooltip />} />
-          <Legend
-            formatter={(value) => (
-              <span className="text-xs text-gray-500 font-medium">{value}</span>
-            )}
-          />
-        </PieChart>
-      </ResponsiveContainer>
-    </Card>
+    <Link to="/sms/review" className="block">
+      <Card className="px-5 py-3.5 flex items-center justify-between gap-3 hover:shadow-md transition-shadow">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="flex h-8 min-w-8 px-2 shrink-0 items-center justify-center rounded-xl bg-accent-light text-sm font-bold text-brand tabular-nums">
+            {count}
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-800">SMS to review</p>
+            <p className="text-xs text-gray-400">Totals are incomplete until you confirm them.</p>
+          </div>
+        </div>
+        <span className="text-xs font-semibold text-accent shrink-0">Review</span>
+      </Card>
+    </Link>
   );
 }
 
@@ -317,7 +271,7 @@ function RecentTransactions({ transactions }) {
     <Card className="p-0 overflow-hidden">
       <div className="flex items-center justify-between px-4 md:px-5 py-4 border-b border-gray-100">
         <h2 className="text-sm font-bold text-gray-900">Recent Activity</h2>
-        <p className="text-xs text-gray-400">{transactions.length} of {transactions.length}</p>
+        <Link to="/transactions" className="text-xs font-semibold text-accent hover:underline">View all</Link>
       </div>
 
       {/* Mobile card list */}
@@ -404,45 +358,6 @@ function RecentTransactions({ transactions }) {
 }
 
 // ---------------------------------------------------------------------------
-// ReceivablesSummary
-// ---------------------------------------------------------------------------
-
-function ReceivablesSummary({ summary }) {
-  const { totalOwed, byPerson } = summary;
-
-  return (
-    <Card className="p-6 flex flex-col gap-3">
-      <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-        Receivables
-      </h3>
-
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500 font-medium">Total owed to you</p>
-        <AmountDisplay amount={totalOwed} variant="income" className="text-lg font-bold" />
-      </div>
-
-      {byPerson.length === 0 ? (
-        <p className="text-sm text-gray-400 py-4 text-center">Nothing outstanding</p>
-      ) : (
-        <ul className="divide-y divide-gray-100 -mx-6 px-6 mt-1">
-          {byPerson.map(({ person, amount }) => (
-            <li key={person} className="flex items-center justify-between py-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-accent-light flex items-center justify-center text-xs font-bold text-brand uppercase flex-shrink-0">
-                  {person.charAt(0)}
-                </div>
-                <span className="text-sm font-medium text-gray-700">{person}</span>
-              </div>
-              <AmountDisplay amount={amount} variant="income" className="text-sm" />
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // DashboardPage
 // ---------------------------------------------------------------------------
 
@@ -469,10 +384,6 @@ export default function DashboardPage() {
     if (ownerValue) f.owners = [ownerValue];
     return f;
   }, [beneficiaryFilter, ownerValue]);
-
-  const { data: spendingData, isLoading: spendingLoading } = useMonthlySpending(reportFilters, 6);
-  const { data: categoryData, isLoading: categoryLoading } = useCategoryBreakdown(reportFilters);
-  const receivables = useReceivablesRollup();
 
   // Filter net worth by owner
   const filteredAccountsByType = useMemo(() => {
@@ -518,7 +429,7 @@ export default function DashboardPage() {
   // beneficiary/owner filter (server-paginated, no full in-memory set).
   const { transactions: recentTxns } = useTransactions(reportFilters, {
     page: 1,
-    pageSize: 15,
+    pageSize: 5,
     ordering: '-date',
   });
 
@@ -544,23 +455,17 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Top row: net worth + spending chart */}
+      <SmsToReview />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <NetWorthCard
           accountsByType={filteredAccountsByType}
           balances={filteredBalances}
           netWorth={filteredNetWorth}
         />
-        <MonthlySpendingChart data={spendingData} isLoading={spendingLoading} />
+        <ThisMonthCard filters={reportFilters} />
       </div>
 
-      {/* Middle row: pie chart + receivables */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <CategoryPieChart data={categoryData} isLoading={categoryLoading} />
-        <ReceivablesSummary summary={receivables} />
-      </div>
-
-      {/* Bottom: recent transactions (full width) */}
       <RecentTransactions transactions={recentTxns} />
     </div>
   );

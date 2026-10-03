@@ -16,12 +16,6 @@ function useReportParams(filters, extra) {
   return { params, key };
 }
 
-export function useMonthlySpending(filters = {}, months = 12) {
-  const { params, key } = useReportParams(filters, { months });
-  const { data, isLoading, error } = useApiResource(() => api.getMonthlySpending(params), [key]);
-  return { data: data?.data ?? [], isLoading, error };
-}
-
 export function useSpendingTrends(filters = {}, months = 12) {
   const { params, key } = useReportParams(filters, { months });
   const { data, isLoading, error } = useApiResource(() => api.getSpendingTrends(params), [key]);
@@ -44,35 +38,6 @@ export function useCategoryInsights(categoryId, filters = {}, months = 12, month
   const { params, key } = useReportParams(filters, { category: categoryId, months, month });
   const { data, isLoading, error } = useApiResource(() => api.getCategoryInsights(params), [key]);
   return { data, isLoading, error };
-}
-
-export function useCategoryBreakdown(filters = {}, month) {
-  const { params, key } = useReportParams(filters, month ? { month } : {});
-  const { data, isLoading, error } = useApiResource(() => api.getCategoryBreakdown(params), [key]);
-  const mapped = useMemo(
-    () => (data?.data ?? []).map((r) => ({
-      categoryId: r.category_id,
-      categoryName: r.category_name,
-      total: r.total,
-    })),
-    [data],
-  );
-  return { data: mapped, isLoading, error };
-}
-
-export function useReceivablesRollup() {
-  const { dataVersion } = useData();
-  const { data, isLoading, error } = useApiResource(
-    () => api.getReceivablesRollup(), [dataVersion ?? 0],
-  );
-  const rollup = useMemo(
-    () => ({
-      totalOwed: data?.total_owed ?? 0,
-      byPerson: data?.by_person ?? [],
-    }),
-    [data],
-  );
-  return { ...rollup, isLoading, error };
 }
 
 export function useBeneficiaries() {

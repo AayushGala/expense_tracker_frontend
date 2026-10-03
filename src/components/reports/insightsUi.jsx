@@ -17,6 +17,10 @@ export function shiftMonth(key, delta) {
   return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`;
 }
 
+// A spend-so-far ÷ days projection is noise in the first week (one big bill
+// on day 1 doubles it), so it only shows from this day on.
+export const PACE_MIN_DAY = 7;
+
 export function currentMonthKey() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;

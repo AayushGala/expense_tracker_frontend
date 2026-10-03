@@ -17,12 +17,15 @@ test('hiding amounts on the Dashboard survives a reload and applies to Accounts 
   await expect(page.getByText(MASK)).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Hide amounts' }).click();
-  // Net worth + assets/liabilities/receivable are all masked.
-  await expect(page.getByText(MASK)).toHaveCount(4);
+  // Net worth, its breakdown and this month's spend are all masked; with no
+  // transactions after reset, no ₹ figure is left on the page.
+  await expect(page.getByText(MASK).first()).toBeVisible();
+  await expect(page.getByText(/₹\d/)).toHaveCount(0);
 
   await page.reload();
   await expect(page.getByRole('button', { name: 'Show amounts' })).toBeVisible();
-  await expect(page.getByText(MASK)).toHaveCount(4);
+  await expect(page.getByText(MASK).first()).toBeVisible();
+  await expect(page.getByText(/₹\d/)).toHaveCount(0);
 
   await page.goto('/accounts');
   await expect(page.getByText('HDFC Savings')).toBeVisible();

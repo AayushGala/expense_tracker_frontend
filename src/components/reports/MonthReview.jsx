@@ -10,7 +10,7 @@ import { useUrlFilters } from '../../hooks/useUrlFilters';
 import { formatINR } from '../../utils/formatters';
 import {
   ChangeChip, SectionCard, ShareRow, TopTransactions,
-  currentMonthKey, monthLabel, shiftMonth,
+  PACE_MIN_DAY, currentMonthKey, monthLabel, shiftMonth,
 } from './insightsUi';
 
 const FILTER_SCHEMA = {
@@ -154,7 +154,7 @@ export default function MonthReview() {
         </Card>
       ) : (
         <>
-          {data.pace && data.average && (
+          {data.pace && data.pace.day >= PACE_MIN_DAY && data.average && (
             <Card className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-2 bg-gray-50/60">
               <p className="text-sm text-gray-600">
                 Day {data.pace.day} of {data.pace.days_in_month}. At this pace you'll spend{' '}

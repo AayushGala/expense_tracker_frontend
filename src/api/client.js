@@ -137,8 +137,6 @@ const api = {
   getTransactionSummary: (params) => request('GET', `/api/transactions/summary/${qs(params)}`),
 
   // Aggregates / reports (all accept the same TransactionFilterSet params).
-  getMonthlySpending: (params) => request('GET', `/api/transactions/monthly_spending/${qs(params)}`),
-  getCategoryBreakdown: (params) => request('GET', `/api/transactions/category_breakdown/${qs(params)}`),
   getCashflow: (params) => request('GET', `/api/transactions/cashflow/${qs(params)}`),
   getSpendingTrends: (params) => request('GET', `/api/transactions/spending_trends/${qs(params)}`),
   getMonthReview: (params) => request('GET', `/api/transactions/month_review/${qs(params)}`),
@@ -152,7 +150,6 @@ const api = {
   getAccountLedger: (id) => request('GET', `/api/accounts/${id}/ledger/`),
 
   // Receivables rollup.
-  getReceivablesRollup: () => request('GET', '/api/receivables/summary/'),
 
   // Receivables
   updateReceivable: (id, data) => request('PATCH', `/api/receivables/${id}/`, data),

@@ -60,11 +60,13 @@ test('hidden amounts also mask account balances, account history and book-close 
   await page.getByText('HDFC Savings').click();
   await expect(page.getByText('Current Balance').locator('..')).toContainText(MASK);
 
-  // Reports → Account History: stats and running balances masked.
+  // Reports → Net Worth: the net worth history and the one-account balances
+  // are masked, leaving no ₹ figure on the tab.
   await page.goto('/reports');
-  await page.getByRole('button', { name: 'Account History' }).click();
+  await page.getByRole('button', { name: 'Net Worth' }).click();
+  await expect(page.getByText('Net worth now').locator('..')).toContainText(MASK);
   await expect(page.getByText('Current Balance').locator('..')).toContainText(MASK);
-  await expect(page.getByText(/Bal: ₹\d/)).toHaveCount(0);
+  await expect(page.getByText(/₹\d/)).toHaveCount(0);
 
   // Settings → Book Closing: the close's net worth is masked.
   await page.goto('/settings');

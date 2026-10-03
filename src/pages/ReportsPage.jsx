@@ -1,20 +1,42 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
+import MultiSelect from '../components/common/MultiSelect';
 import MonthReview from '../components/reports/MonthReview';
-import SpendingTrends from '../components/reports/SpendingTrends';
+import TrendsReport from '../components/reports/TrendsReport';
 import CashflowReport from '../components/reports/CashflowReport';
-import AccountHistory from '../components/reports/AccountHistory';
-import ReceivablesReport from '../components/reports/ReceivablesReport';
+import NetWorthReport from '../components/reports/NetWorthReport';
+import { currentMonthKey } from '../components/reports/insightsUi';
+import { useBeneficiaries } from '../hooks/useReportData';
+import { useOwners } from '../hooks/useOwners';
+import { useUrlFilters } from '../hooks/useUrlFilters';
 
 const TABS = [
-  { id: 'review',      label: 'Month in Review' },
-  { id: 'spending',    label: 'Spending' },
-  { id: 'cashflow',   label: 'Cashflow' },
-  { id: 'account',    label: 'Account History' },
-  { id: 'receivables',label: 'Receivables' },
+  { id: 'review',   label: 'Month in Review' },
+  { id: 'trends',   label: 'Trends' },
+  { id: 'cashflow', label: 'Cashflow' },
+  { id: 'networth', label: 'Net Worth' },
 ];
 
+// One URL-backed filter set for the whole page: the tab, the reviewed month
+// and the owner/beneficiary filters survive reloads, tab switches and the
+// round trip through a category drill-down.
+const FILTER_SCHEMA = {
+  tab: {},
+  month: {},
+  owners: { array: true },
+  beneficiaries: { array: true },
+};
+
 export default function ReportsPage() {
-  const [activeTab, setActiveTab] = useState('review');
+  const defaults = useMemo(() => ({ tab: 'review', month: currentMonthKey() }), []);
+  const [filters, setFilters] = useUrlFilters(FILTER_SCHEMA, defaults);
+  const { owners, ownerOptions } = useOwners();
+  const beneficiaryOptions = useBeneficiaries();
+  const ownerMultiOptions = useMemo(() => ownerOptions.filter((o) => o.value !== ''), [ownerOptions]);
+
+  const activeTab = TABS.some((t) => t.id === filters.tab) ? filters.tab : 'review';
+  const update = (partial) => setFilters((prev) => ({ ...prev, ...partial }));
+  // Net worth is account-based: beneficiary has no meaning there.
+  const showBeneficiaries = activeTab !== 'networth' && beneficiaryOptions.length > 0;
 
   return (
     <div className="space-y-6">
@@ -29,7 +51,7 @@ export default function ReportsPage() {
         {TABS.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => update({ tab: tab.id })}
             className={`whitespace-nowrap px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 -mb-px transition-colors ${
               activeTab === tab.id
                 ? 'border-brand text-brand'
@@ -41,13 +63,36 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Tab panels — hidden keeps components mounted to preserve state */}
+      {(owners.length > 0 || showBeneficiaries) && (
+        <div className="-mt-2 flex flex-wrap items-center gap-3">
+          {owners.length > 0 && (
+            <MultiSelect
+              value={filters.owners}
+              onChange={(v) => update({ owners: v })}
+              options={ownerMultiOptions}
+              placeholder="All Owners"
+              singularLabel="owner"
+              className="min-w-[130px]"
+            />
+          )}
+          {showBeneficiaries && (
+            <MultiSelect
+              value={filters.beneficiaries}
+              onChange={(v) => update({ beneficiaries: v })}
+              options={beneficiaryOptions}
+              placeholder="All Beneficiaries"
+              singularLabel="beneficiary"
+              className="min-w-[150px]"
+            />
+          )}
+        </div>
+      )}
+
       <div className="-mt-2">
-        <div className={activeTab !== 'review'      ? 'hidden' : ''}><MonthReview /></div>
-        <div className={activeTab !== 'spending'    ? 'hidden' : ''}><SpendingTrends /></div>
-        <div className={activeTab !== 'cashflow'    ? 'hidden' : ''}><CashflowReport /></div>
-        <div className={activeTab !== 'account'     ? 'hidden' : ''}><AccountHistory /></div>
-        <div className={activeTab !== 'receivables' ? 'hidden' : ''}><ReceivablesReport /></div>
+        {activeTab === 'review' && <MonthReview filters={filters} onChange={update} />}
+        {activeTab === 'trends' && <TrendsReport filters={filters} />}
+        {activeTab === 'cashflow' && <CashflowReport filters={filters} />}
+        {activeTab === 'networth' && <NetWorthReport owners={filters.owners} />}
       </div>
     </div>
   );

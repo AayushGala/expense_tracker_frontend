@@ -138,7 +138,8 @@ const api = {
 
   // Aggregates / reports (all accept the same TransactionFilterSet params).
   getCashflow: (params) => request('GET', `/api/transactions/cashflow/${qs(params)}`),
-  getSpendingTrends: (params) => request('GET', `/api/transactions/spending_trends/${qs(params)}`),
+  getGroupTrends: (params) => request('GET', `/api/transactions/group_trends/${qs(params)}`),
+  getNetWorthHistory: (params) => request('GET', `/api/accounts/net_worth_history/${qs(params)}`),
   getMonthReview: (params) => request('GET', `/api/transactions/month_review/${qs(params)}`),
   getCategoryInsights: (params) => request('GET', `/api/transactions/category_insights/${qs(params)}`),
   getBeneficiaries: () => request('GET', '/api/transactions/beneficiaries/'),

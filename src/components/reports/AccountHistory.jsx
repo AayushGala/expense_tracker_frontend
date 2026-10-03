@@ -17,7 +17,6 @@ import api from '../../api/client';
 import { useData } from '../../context/DataContext';
 import { formatINR, formatDate, MASKED_AMOUNT } from '../../utils/formatters';
 import { useHideAmounts } from '../../hooks/useHideAmounts';
-import HideAmountsToggle from '../common/HideAmountsToggle';
 
 function CustomTooltip({ active, payload, label, hidden }) {
   if (!active || !payload?.length) return null;
@@ -29,12 +28,21 @@ function CustomTooltip({ active, payload, label, hidden }) {
   );
 }
 
-export default function AccountHistory() {
-  const { accounts, getAccountBalance } = useAccounts();
+/** One account's balance over time; a section of the Net Worth tab. */
+export default function AccountHistory({ owners = [] }) {
+  const { accounts: allAccounts, getAccountBalance } = useAccounts();
+  const accounts = useMemo(
+    () => (owners.length ? allAccounts.filter((a) => owners.includes(a.owner)) : allAccounts),
+    [allAccounts, owners],
+  );
   const { dataVersion } = useData();
 
-  const [selectedAccountId, setSelectedAccountId] = useState(accounts[0]?.id ?? '');
-  const [hidden, toggleHidden] = useHideAmounts();
+  const [pickedAccountId, setSelectedAccountId] = useState('');
+  // Fall back to the first account when nothing (or a filtered-out one) is picked.
+  const selectedAccountId = accounts.some((a) => a.id === pickedAccountId)
+    ? pickedAccountId
+    : (accounts[0]?.id ?? '');
+  const [hidden] = useHideAmounts();
 
   const { data: ledgerData } = useApiResource(
     () => api.getAccountLedger(selectedAccountId),
@@ -73,8 +81,7 @@ export default function AccountHistory() {
     <div className="space-y-4">
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3 min-h-[44px]">
-        <h2 className="text-base font-bold text-gray-900 flex-1">Account History</h2>
-        <HideAmountsToggle hidden={hidden} onToggle={toggleHidden} />
+        <h2 className="text-base font-bold text-gray-900 flex-1">One account</h2>
         <Dropdown
           value={selectedAccountId}
           onChange={setSelectedAccountId}
@@ -149,30 +156,6 @@ export default function AccountHistory() {
         )}
       </Card>
 
-      {/* Recent ledger entries */}
-      {ledger.length > 0 && (
-        <Card className="p-5">
-          <p className="text-sm font-medium text-gray-600 mb-3">
-            Recent entries ({ledger.length})
-          </p>
-          <div className="divide-y divide-gray-100 -mx-6 px-6 max-h-80 overflow-y-auto">
-            {[...ledger].reverse().map((entry) => (
-              <div key={entry.id} className="flex items-center justify-between py-2.5 gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs text-gray-400">{formatDate(entry.date)}</p>
-                  <p className="text-xs text-gray-500">{entry.entry_type}</p>
-                </div>
-                <div className="text-right">
-                  <p className={`text-sm font-semibold ${entry.entry_type === 'DEBIT' ? 'text-accent' : 'text-gray-800'}`}>
-                    {entry.entry_type === 'DEBIT' ? '-' : '+'}{formatINR(entry.amount)}
-                  </p>
-                  <p className="text-xs text-gray-400">Bal: {hidden ? MASKED_AMOUNT : formatINR(entry.runningBalance)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
     </div>
   );
 }

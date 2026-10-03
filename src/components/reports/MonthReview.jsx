@@ -1,23 +1,14 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../common/Card';
-import MultiSelect from '../common/MultiSelect';
 import LoadingSpinner from '../common/LoadingSpinner';
 import EmptyState from '../common/EmptyState';
-import { useMonthReview, useBeneficiaries } from '../../hooks/useReportData';
-import { useOwners } from '../../hooks/useOwners';
-import { useUrlFilters } from '../../hooks/useUrlFilters';
+import { useMonthReview } from '../../hooks/useReportData';
 import { formatINR } from '../../utils/formatters';
 import {
   ChangeChip, SectionCard, ShareRow, TopTransactions,
   PACE_MIN_DAY, currentMonthKey, monthLabel, shiftMonth,
 } from './insightsUi';
-
-const FILTER_SCHEMA = {
-  month: {},
-  owners: { array: true },
-  beneficiaries: { array: true },
-};
 
 const MAX_CHANGES = 4;
 
@@ -57,13 +48,9 @@ function StatCard({ label, value, previous, average, prevLabel, baselineMonths, 
   );
 }
 
-export default function MonthReview() {
+/** `filters` ({ month, owners, beneficiaries }) live in the Reports page URL. */
+export default function MonthReview({ filters, onChange }) {
   const navigate = useNavigate();
-  const { owners, ownerOptions } = useOwners();
-  const beneficiaryOptions = useBeneficiaries();
-  const defaults = useMemo(() => ({ month: currentMonthKey() }), []);
-  const [filters, setFilters] = useUrlFilters(FILTER_SCHEMA, defaults);
-  const ownerMultiOptions = useMemo(() => ownerOptions.filter((o) => o.value !== ''), [ownerOptions]);
 
   const apiFilters = useMemo(
     () => ({ owners: filters.owners, beneficiaries: filters.beneficiaries }),
@@ -88,7 +75,7 @@ export default function MonthReview() {
     };
   }, [data]);
 
-  const setMonth = (month) => setFilters((prev) => ({ ...prev, month }));
+  const setMonth = (month) => onChange({ month });
   const openCategory = (id) => navigate(drilldownPath(id, filters));
 
   const totals = data?.totals;
@@ -98,8 +85,8 @@ export default function MonthReview() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 min-h-[44px]">
-        <div className="flex items-center gap-1 basis-full sm:basis-auto sm:flex-1 min-w-0">
+      <div className="flex items-center min-h-[44px]">
+        <div className="flex items-center gap-1 min-w-0">
           <button
             type="button"
             onClick={() => setMonth(shiftMonth(filters.month, -1))}
@@ -124,26 +111,6 @@ export default function MonthReview() {
             </svg>
           </button>
         </div>
-        {owners.length > 0 && (
-          <MultiSelect
-            value={filters.owners}
-            onChange={(v) => setFilters((prev) => ({ ...prev, owners: v }))}
-            options={ownerMultiOptions}
-            placeholder="All Owners"
-            singularLabel="owner"
-            className="min-w-[130px]"
-          />
-        )}
-        {beneficiaryOptions.length > 0 && (
-          <MultiSelect
-            value={filters.beneficiaries}
-            onChange={(v) => setFilters((prev) => ({ ...prev, beneficiaries: v }))}
-            options={beneficiaryOptions}
-            placeholder="All Beneficiaries"
-            singularLabel="beneficiary"
-            className="min-w-[150px]"
-          />
-        )}
       </div>
 
       {isLoading && !data ? (

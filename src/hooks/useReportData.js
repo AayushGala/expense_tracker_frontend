@@ -16,9 +16,16 @@ function useReportParams(filters, extra) {
   return { params, key };
 }
 
-export function useSpendingTrends(filters = {}, months = 12) {
+export function useGroupTrends(filters = {}, months = 12) {
   const { params, key } = useReportParams(filters, { months });
-  const { data, isLoading, error } = useApiResource(() => api.getSpendingTrends(params), [key]);
+  const { data, isLoading, error } = useApiResource(() => api.getGroupTrends(params), [key]);
+  return { data, isLoading, error };
+}
+
+/** Net worth is account-based, so only the owner filter applies. */
+export function useNetWorthHistory(owners = [], months = 12) {
+  const { params, key } = useReportParams({ owners }, { months });
+  const { data, isLoading, error } = useApiResource(() => api.getNetWorthHistory(params), [key]);
   return { data: data?.data ?? [], isLoading, error };
 }
 

@@ -11,6 +11,18 @@ export function monthLabel(key, opts = { month: 'long', year: 'numeric' }) {
   return new Date(y, m - 1, 1).toLocaleDateString('en-GB', opts);
 }
 
+/** Short Indian-unit amounts for dense tables: ₹950, ₹12.3k, ₹4.2L, ₹1.1Cr. */
+export function formatCompactINR(value) {
+  const n = Number(value) || 0;
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  const fmt = (v, unit) => `${sign}₹${v >= 100 ? Math.round(v) : Number(v.toFixed(1))}${unit}`;
+  if (abs >= 1e7) return fmt(abs / 1e7, 'Cr');
+  if (abs >= 1e5) return fmt(abs / 1e5, 'L');
+  if (abs >= 1e3) return fmt(abs / 1e3, 'k');
+  return `${sign}₹${Math.round(abs)}`;
+}
+
 export function shiftMonth(key, delta) {
   const [y, m] = key.split('-').map(Number);
   const idx = y * 12 + (m - 1) + delta;
@@ -39,7 +51,9 @@ export function ChangeChip({ change, pct, goodWhenDown = true, compact = false }
   const up = n > 0;
   const good = goodWhenDown ? !up : up;
   // A huge % off a tiny average says nothing; call it new instead.
-  const pctText = pct == null || Math.abs(pct) >= 500 ? (up ? 'new' : '') : `${up ? '+' : ''}${Math.round(pct)}%`;
+  const pctText = pct == null || Math.abs(pct) >= 500
+    ? (up ? 'new' : '')
+    : Math.abs(pct) < 1 ? '<1%' : `${up ? '+' : ''}${Math.round(pct)}%`;
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums whitespace-nowrap ${

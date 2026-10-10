@@ -78,6 +78,12 @@ describe('TransactionSummary', () => {
     expect(screen.getByText(/to get back/i)).toBeInTheDocument();
   });
 
+  it('shows what is left to get back once part is settled', () => {
+    const summary = { ...baseSummary, split_count: 3, split_others_amount: 38958, split_outstanding: 27022 };
+    render(<TransactionSummary summary={summary} isLoading={false} />);
+    expect(screen.getByText(/₹27,022\.00 left to get back/)).toBeInTheDocument();
+  });
+
   it('hides the split pill when splits put nothing on others', () => {
     const summary = { ...baseSummary, split_count: 1, split_others_amount: 0 };
     render(<TransactionSummary summary={summary} isLoading={false} />);

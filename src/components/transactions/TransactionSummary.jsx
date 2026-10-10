@@ -33,6 +33,16 @@ function MovementPill({ icon, count, label, amount, suffix, hidden }) {
   );
 }
 
+// Others' share of the period's splits, then what is still owed on them
+// once settlements (money back, paid for me, write-off) are taken off.
+function splitSuffix(summary, hidden) {
+  const paid = Number(summary.split_others_amount ?? 0);
+  const left = Number(summary.split_outstanding ?? paid);
+  if (left <= 0) return '· all settled';
+  if (left >= paid) return 'to get back';
+  return `· ${hidden ? MASK : formatINR(left)} left to get back`;
+}
+
 export default function TransactionSummary({ summary, isLoading }) {
   const [hidden, toggleHidden] = useHideAmounts();
 
@@ -44,7 +54,7 @@ export default function TransactionSummary({ summary, isLoading }) {
   if (!summary) return null;
 
   const movements = [
-    { key: 'split', icon: '⇄', label: 'split expense', count: summary.split_count, amount: summary.split_others_amount, suffix: 'to get back' },
+    { key: 'split', icon: '⇄', label: 'split expense', count: summary.split_count, amount: summary.split_others_amount, suffix: splitSuffix(summary, hidden) },
     { key: 'transfer', icon: '↔', label: 'transfer', count: summary.transfer_count, amount: summary.transfer_amount },
     { key: 'investment', icon: '📈', label: 'investment', count: summary.investment_count, amount: summary.investment_amount },
     { key: 'bill_payment', icon: '💳', label: 'bill payment', count: summary.bill_payment_count, amount: summary.bill_payment_amount },

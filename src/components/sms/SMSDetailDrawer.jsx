@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
 import api from '../../api/client';
+import { useApiResource } from '../../hooks/useApiResource';
 import CalendarPicker from '../common/CalendarPicker';
 import Select from '../common/Select';
 import SMSStatusBadge from './SMSStatusBadge';
@@ -135,6 +136,12 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
 
   const isLinked = !!sms?.transaction;
   const canConfirm = !isLinked && sms?.parsed_amount != null;
+
+  // Once confirmed, the linked transaction is the truth (it may have been
+  // edited since), so show it instead of the parse.
+  const { data: linkedTxn, isLoading: linkedTxnLoading } = useApiResource(
+    () => api.getTransaction(sms.transaction), [sms?.transaction], { skip: !isLinked },
+  );
 
   const [state, dispatch] = useReducer(drawerReducer, sms, initialStateFromSms);
   const { values, errors, submitting, actionBusy } = state;
@@ -299,8 +306,13 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
         </div>
       </div>
 
-      {/* Parsed result */}
-      {hasParsedFields && (
+      {isLinked && (
+        <LinkedTransaction txn={linkedTxn} loading={linkedTxnLoading} accountMap={accountMap} />
+      )}
+
+      {/* Parsed result — replaced by the linked transaction once confirmed;
+          shown as a fallback if that fetch fails. */}
+      {hasParsedFields && (!isLinked || (!linkedTxn && !linkedTxnLoading)) && (
         <div>
           <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">
             Parsed result
@@ -502,6 +514,36 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function LinkedTransaction({ txn, loading, accountMap }) {
+  if (loading) {
+    return <p className="text-sm text-gray-400">Loading confirmed transaction…</p>;
+  }
+  if (!txn) return null;
+  // Double-entry layout: money leaves the CREDIT account, lands in the DEBIT one.
+  const entries = txn.entries ?? [];
+  const fromEntry = entries.find((e) => e.entry_type === 'CREDIT' && e.account_id);
+  const toEntry = entries.find((e) => e.entry_type === 'DEBIT' && e.account_id);
+  const accountName = (entry) => (entry ? accountMap.get(entry.account_id)?.name ?? '—' : '—');
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">
+        Confirmed transaction
+      </p>
+      <dl className="rounded-xl ring-1 ring-gray-100 divide-y divide-gray-50 text-sm">
+        <ParsedRow label="Type" value={txn.type.replace(/_/g, ' ')} />
+        <ParsedRow label="Amount" value={txn.amount ? formatINR(txn.amount) : '—'} />
+        <ParsedRow label="From Account" value={accountName(fromEntry)} />
+        <ParsedRow label="To Account" value={accountName(toEntry)} />
+        <ParsedRow label="Category" value={txn.category_name || (txn.category_names ?? []).join(', ') || '—'} />
+        <ParsedRow label="Date" value={txn.date || '—'} />
+        <ParsedRow label="Beneficiary" value={txn.beneficiary || '—'} />
+        <ParsedRow label="Owner" value={txn.owner || '—'} />
+        {txn.notes && <ParsedRow label="Notes" value={txn.notes} />}
+      </dl>
     </div>
   );
 }

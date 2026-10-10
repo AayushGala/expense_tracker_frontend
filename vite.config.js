@@ -9,7 +9,8 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      '/api': 'http://localhost:8000',
+      // Overridable so an isolated e2e backend can run beside the dev one.
+      '/api': process.env.VITE_API_PROXY || 'http://localhost:8000',
     },
   },
   // `npm start` serves the production build. Same port as dev so phone

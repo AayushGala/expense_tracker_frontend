@@ -73,9 +73,10 @@ jobs:
         working-directory: backend
         run: |
           nohup python manage.py runserver 0.0.0.0:8000 --noreload > django.log 2>&1 &
-          # Wait until the API responds.
+          # Wait until Django responds (admin login is public; /api/schema/
+          # went away with drf-spectacular).
           for i in {1..30}; do
-            if curl -sf http://127.0.0.1:8000/api/schema/ > /dev/null; then
+            if curl -sf http://127.0.0.1:8000/admin/login/ > /dev/null; then
               echo "Django up after ${i}s"
               exit 0
             fi

@@ -31,9 +31,9 @@ test('hiding amounts on the Dashboard survives a reload and applies to Accounts 
   await expect(page.getByText('HDFC Savings')).toBeVisible();
   await expect(page.getByText(/₹\d/)).toHaveCount(0);
 
-  // Spent / Received / Net on the Transactions summary.
+  // Spent (self) / For others / Received / Net on the Transactions summary.
   await page.goto('/transactions');
-  await expect(page.getByText(MASK)).toHaveCount(3);
+  await expect(page.getByText(MASK)).toHaveCount(4);
 
   await page.getByRole('button', { name: 'Show amounts' }).click();
   await expect(page.getByText(MASK)).toHaveCount(0);

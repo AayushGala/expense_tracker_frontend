@@ -42,7 +42,7 @@ test('record a reimbursement that settles a receivable', async ({ page }) => {
   );
 
   await page.getByRole('button', { name: /record reimbursement/i }).click();
-  await expect(page.getByText(/transaction saved/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/reimbursement saved/i)).toBeVisible({ timeout: 15_000 });
 
   // Receivable now fully settled.
   const updated = (await getTransaction(split.id)).receivables.find((r) => r.id === receivable.id);

@@ -1,3 +1,4 @@
+import { beneficiaryLabel } from '../../utils/formatters';
 import SourceTransactionPicker from './SourceTransactionPicker';
 import { labelClass, errorClass } from '../../utils/formStyles';
 
@@ -20,7 +21,7 @@ export default function RefundFields({
       {sourceTxn && sourceCategoryName && (
         <ReadOnlyRow label="Refund Of (Category)" value={sourceCategoryName} />
       )}
-      {beneficiary && <ReadOnlyRow label="Beneficiary" value={beneficiary} />}
+      {beneficiary && <ReadOnlyRow label="Beneficiary" value={beneficiaryLabel(beneficiary)} />}
       {tags && <ReadOnlyRow label="Tags" value={tags} />}
     </div>
   );

@@ -5,7 +5,7 @@ import { useApiResource } from '../hooks/useApiResource';
 import api from '../api/client';
 import { useOwners } from '../hooks/useOwners';
 import { useData } from '../context/DataContext';
-import { formatINR, MASKED_AMOUNT } from '../utils/formatters';
+import { formatINR, MASKED_AMOUNT, otherBeneficiary } from '../utils/formatters';
 import { sum, ZERO } from '../utils/money';
 import Card from '../components/common/Card';
 import AmountDisplay from '../components/common/AmountDisplay';
@@ -81,7 +81,7 @@ function AccountLedger({ account, ledger, onEntryClick }) {
       {ledger.map((entry) => {
         // Server ledger rows carry the transaction's notes/beneficiary; the
         // detail modal self-fetches the rest from this minimal seed.
-        const label = entry.notes || entry.beneficiary || '';
+        const label = entry.notes || otherBeneficiary(entry.beneficiary);
         const isDebit = entry.entry_type === 'DEBIT';
         const isPositive = isDebitNormal ? isDebit : !isDebit;
         const txn = {

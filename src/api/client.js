@@ -154,6 +154,9 @@ const api = {
 
   // Receivables
   updateReceivable: (id, data) => request('PATCH', `/api/receivables/${id}/`, data),
+  // Settle part or all of what one person owes (oldest first): mode is
+  // money | paid_for_me | write_off.
+  settleReceivables: (data) => request('POST', '/api/receivables/settle/', data),
 
   // Account Types
   getAccountTypes: () => request('GET', '/api/account-types/'),

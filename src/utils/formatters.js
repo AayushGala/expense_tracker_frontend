@@ -37,3 +37,16 @@ export function transactionTypeLabel(type) {
   };
   return labels[type] ?? type;
 }
+
+// Beneficiaries are stored as the keys 'self' / 'family' or a typed name;
+// show them capitalised ("Self", "Family").
+export function beneficiaryLabel(value) {
+  if (!value) return '';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+// For "describe this transaction" fallbacks: 'self' says nothing, so only
+// family or a named person is worth showing.
+export function otherBeneficiary(value) {
+  return value && value !== 'self' ? beneficiaryLabel(value) : '';
+}

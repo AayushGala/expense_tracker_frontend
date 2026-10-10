@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { buildTransactionParams } from '../utils/transactionParams';
 
-const buildParams = (filters, splitMode) =>
-  buildTransactionParams(filters, splitMode ? { split_mode: splitMode } : {});
-
-export function useTransactionSummary(filters, splitMode = 'my_share') {
+export function useTransactionSummary(filters) {
   const [summary, setSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -16,7 +13,7 @@ export function useTransactionSummary(filters, splitMode = 'my_share') {
     let cancelled = false;
     setIsLoading(true);
     setError(null);
-    api.getTransactionSummary(buildParams(filters, splitMode))
+    api.getTransactionSummary(buildTransactionParams(filters))
       .then((data) => {
         if (!cancelled) setSummary(data);
       })
@@ -27,7 +24,7 @@ export function useTransactionSummary(filters, splitMode = 'my_share') {
         if (!cancelled) setIsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [filtersKey, splitMode]);
+  }, [filtersKey]);
 
   return { summary, isLoading, error };
 }

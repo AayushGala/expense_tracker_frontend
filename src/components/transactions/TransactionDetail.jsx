@@ -5,7 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { useApiResource } from '../../hooks/useApiResource';
 import api from '../../api/client';
 import { isDateClosed } from '../../utils/bookClose';
-import { formatDate, formatINR, transactionTypeLabel } from '../../utils/formatters';
+import { beneficiaryLabel, formatDate, otherBeneficiary, formatINR, transactionTypeLabel } from '../../utils/formatters';
 import { D, sum } from '../../utils/money';
 import Badge from '../common/Badge';
 
@@ -146,7 +146,7 @@ export default function TransactionDetail({
     fromName && { label: 'From Account', value: fromName },
     toName && { label: 'To Account', value: toName },
     category_id && { label: 'Category', value: categoryMap.get(category_id)?.name ?? categoryName ?? category_id },
-    beneficiary && { label: 'Beneficiary', value: beneficiary.charAt(0).toUpperCase() + beneficiary.slice(1) },
+    beneficiary && { label: 'Beneficiary', value: beneficiaryLabel(beneficiary) },
     platform && { label: 'Platform', value: platform },
     tags?.length > 0 && { label: 'Tags', value: Array.isArray(tags) ? tags.join(', ') : tags },
     notes && { label: 'Notes', value: notes },
@@ -266,7 +266,7 @@ export default function TransactionDetail({
           <span>
             <span className="text-gray-400">Refund of:</span>{' '}
             <span className="font-medium text-gray-700">
-              {sourceTxn.notes || sourceTxn.beneficiary || 'Expense'} · {formatDate(sourceTxn.date)}
+              {sourceTxn.notes || otherBeneficiary(sourceTxn.beneficiary) || 'Expense'} · {formatDate(sourceTxn.date)}
             </span>
           </span>
         </button>

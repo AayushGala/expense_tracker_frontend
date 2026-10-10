@@ -3,6 +3,7 @@ import api from '../api/client';
 import { buildTransactionParams } from '../utils/transactionParams';
 import { useApiResource } from './useApiResource';
 import { useData } from '../context/DataContext';
+import { beneficiaryLabel } from '../utils/formatters';
 
 // Server-backed replacements for the old in-memory useReports() callbacks.
 // Each returns data in the same shape the chart components already consume,
@@ -50,5 +51,5 @@ export function useCategoryInsights(categoryId, filters = {}, months = 12, month
 export function useBeneficiaries() {
   const { dataVersion } = useData();
   const { data } = useApiResource(() => api.getBeneficiaries(), [dataVersion ?? 0]);
-  return useMemo(() => (data ?? []).map((b) => ({ value: b, label: b })), [data]);
+  return useMemo(() => (data ?? []).map((b) => ({ value: b, label: beneficiaryLabel(b) })), [data]);
 }

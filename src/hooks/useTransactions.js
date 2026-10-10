@@ -33,6 +33,7 @@ export function useTransactions(filters = {}, { page = 1, ordering, pageSize } =
     () => (data?.results ?? []).map((r) => ({
       ...r,
       amount: D(r.amount),
+      myShare: r.my_share != null ? D(r.my_share) : null,
       accountNames: r.account_names ?? [],
       categoryNames: r.category_names ?? [],
     })),

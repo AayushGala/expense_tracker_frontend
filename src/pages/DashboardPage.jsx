@@ -13,11 +13,12 @@ import api from '../api/client';
 import Card from '../components/common/Card';
 import Badge from '../components/common/Badge';
 import AmountDisplay from '../components/common/AmountDisplay';
+import TransactionAmount from '../components/common/TransactionAmount';
 import HideAmountsToggle from '../components/common/HideAmountsToggle';
 import EmptyState from '../components/common/EmptyState';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { formatDate, formatINR, MASKED_AMOUNT, transactionTypeLabel } from '../utils/formatters';
-import TypeIcon, { getVariant } from '../components/common/TypeIcon';
+import TypeIcon from '../components/common/TypeIcon';
 import { drilldownPath } from '../components/reports/MonthReview';
 import { ChangeChip, PACE_MIN_DAY, currentMonthKey } from '../components/reports/insightsUi';
 
@@ -289,11 +290,7 @@ function RecentTransactions({ transactions }) {
                 {txn.platform && ` · ${txn.platform}`}
               </p>
             </div>
-            <AmountDisplay
-              amount={txn.amount ?? 0}
-              variant={getVariant(txn.type)}
-              className="text-sm font-bold flex-shrink-0"
-            />
+            <TransactionAmount txn={txn} className="text-sm font-bold flex-shrink-0" />
           </div>
         ))}
       </div>
@@ -339,11 +336,7 @@ function RecentTransactions({ transactions }) {
                   )}
                 </td>
                 <td className="py-4 px-3 text-right whitespace-nowrap">
-                  <AmountDisplay
-                    amount={txn.amount ?? 0}
-                    variant={getVariant(txn.type)}
-                    className="text-sm"
-                  />
+                  <TransactionAmount txn={txn} className="text-sm" />
                 </td>
                 <td className="py-4 pl-3 pr-5 hidden sm:table-cell">
                   <Badge type={txn.type} />

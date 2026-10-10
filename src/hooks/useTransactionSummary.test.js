@@ -46,7 +46,6 @@ describe('useTransactionSummary', () => {
     expect(params.get('platform')).toBe('Swiggy');
     expect(params.get('tag')).toBe('food');
     expect(params.get('search')).toBe('coffee');
-    expect(params.get('split_mode')).toBe('my_share');
   });
 
   it('encodes multi-select arrays as repeated query keys', async () => {
@@ -74,15 +73,6 @@ describe('useTransactionSummary', () => {
     const params = lastCallParams();
     expect(params.get('category_ids')).toBe('1,2,3');
     expect(params.getAll('category_ids')).toEqual(['1,2,3']);
-  });
-
-  it('passes split_mode param', async () => {
-    renderHook(() => useTransactionSummary({}, 'total_amount'));
-
-    await waitFor(() => {
-      expect(mockApi.getTransactionSummary).toHaveBeenCalled();
-    });
-    expect(lastCallParams().get('split_mode')).toBe('total_amount');
   });
 
   it('returns summary data on success', async () => {

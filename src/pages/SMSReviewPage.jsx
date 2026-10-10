@@ -11,7 +11,7 @@ import AmountInput from '../components/forms/AmountInput';
 import CategoryPicker from '../components/forms/CategoryPicker';
 import DateField from '../components/forms/DateField';
 import { inputClass, labelClass } from '../utils/formStyles';
-import { transactionTypeLabel } from '../utils/formatters';
+import { beneficiaryLabel, transactionTypeLabel } from '../utils/formatters';
 import { isDateClosed } from '../utils/bookClose';
 import { formatINR } from '../utils/formatters';
 import { effectiveSmsStatus } from '../utils/sms';
@@ -350,7 +350,7 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
                       <span className="font-semibold text-gray-800">
                         {formatINR(dup.amount)}
                       </span>
-                      {' · '}{dup.beneficiary || dup.type}
+                      {' · '}{beneficiaryLabel(dup.beneficiary) || dup.type}
                       {dup.account_names?.length > 0 && ` · ${dup.account_names.join(', ')}`}
                       {' · '}{dup.date}
                     </div>

@@ -29,7 +29,7 @@ export function buildTransactionParams(filters = {}, extra = {}) {
   if (filters.categoryType) params.set('category_type', filters.categoryType);
   if (filters.search) params.set('search', filters.search);
 
-  // Non-filter extras: page, ordering, months, month, page_size, split_mode…
+  // Non-filter extras: page, ordering, months, month, page_size…
   for (const [key, value] of Object.entries(extra)) {
     if (value !== undefined && value !== null && value !== '') {
       params.set(key, String(value));

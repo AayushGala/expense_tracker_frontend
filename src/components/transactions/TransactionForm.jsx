@@ -18,6 +18,7 @@ import Card from '../common/Card';
 import {
   transactionFormReducer,
   makeInitialState,
+  TRANSACTION_TYPES,
 } from './transactionFormReducer';
 import { isDateClosed } from '../../utils/bookClose';
 import { makePersonId } from './PeopleList';
@@ -98,10 +99,10 @@ function buildInitialData(transaction, entries, accounts, receivables) {
       };
     }
     case 'reimbursement':
-      return {
-        ...base,
-        to_account_id: debitAccountEntry?.account_id ?? '',
-      };
+      // Settled without money: the DEBIT is on a category, not an account.
+      return debitCategoryEntry
+        ? { ...base, settle_mode: 'category', category_id: debitCategoryEntry.category_id }
+        : { ...base, to_account_id: debitAccountEntry?.account_id ?? '' };
     default:
       return base;
   }
@@ -122,6 +123,7 @@ function valuesFromInitialData(initialData, ctx = {}) {
   if (initialData.platform != null) v.platform = initialData.platform;
   if (initialData.tags != null) v.tags = initialData.tags;
   if (initialData.owner != null) v.owner = initialData.owner;
+  if (initialData.settle_mode) v.settle_mode = initialData.settle_mode;
 
   // ExpenseForm splits beneficiary into a type + custom-text pair; IncomeForm
   // reads the raw string. Maintain both so either form can edit.
@@ -197,6 +199,8 @@ export default function TransactionForm() {
   const [searchParams] = useSearchParams();
   const refundOfId = searchParams.get('refund_of');
   const fromSmsId = searchParams.get('from_sms');
+  // ?type= preselects the type of a new transaction (e.g. from Receivables).
+  const typeParam = searchParams.get('type');
 
   // Return to the exact view the form was opened from (filters, page) on
   // save and cancel alike. key 'default' means the form is the first entry
@@ -208,7 +212,7 @@ export default function TransactionForm() {
   }
   const {
     accounts, categories, receivables, isLoading: dataLoading,
-    addTransaction, updateTransaction, book_closed_through,
+    addTransaction, invalidate, updateTransaction, book_closed_through,
   } = useData();
   const { getAccountOwner } = useOwners();
   const toast = useToast();
@@ -314,7 +318,9 @@ export default function TransactionForm() {
         initialValues: valuesFromInitialData(initial, { receivables }) ?? undefined,
       });
     }
-    return makeInitialState();
+    return makeInitialState(
+      TRANSACTION_TYPES.includes(typeParam) ? { type: typeParam } : undefined,
+    );
   });
 
   // Edit/refund initial data is fetched by id (async), so load it into the
@@ -373,6 +379,12 @@ export default function TransactionForm() {
       if (isEditing) {
         await updateTransaction(parseInt(id), payload);
         toast.success('Transaction updated');
+      } else if (payload.type === 'reimbursement' && payload.person_name) {
+        // A new reimbursement settles a person's total, oldest split first.
+        const { type: _type, ...settle } = payload;
+        const result = await api.settleReceivables(settle);
+        invalidate();
+        toast.success(result.count > 1 ? `Settled across ${result.count} splits` : 'Reimbursement saved');
       } else {
         await addTransaction(payload);
         toast.success(fromSmsId ? 'Transaction created and SMS confirmed' : 'Transaction saved');

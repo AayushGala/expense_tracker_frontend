@@ -4,14 +4,14 @@ import { useApiResource } from '../../hooks/useApiResource';
 import { useData } from '../../context/DataContext';
 import { buildTransactionParams } from '../../utils/transactionParams';
 import Select from '../common/Select';
-import { formatINR } from '../../utils/formatters';
+import { formatINR, otherBeneficiary } from '../../utils/formatters';
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 function buildLabel(t) {
   const cat = t.category_name || '—';
   const acct = t.account_names?.[0] || '';
-  const descriptor = t.notes || t.beneficiary || t.category_name || 'Expense';
+  const descriptor = t.notes || otherBeneficiary(t.beneficiary) || t.category_name || 'Expense';
   return `${t.date} · ${cat} · ${descriptor}${acct ? ` · ${acct}` : ''} · ${formatINR(t.amount)}`;
 }
 

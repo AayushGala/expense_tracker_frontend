@@ -8,7 +8,7 @@ import { buildTransactionParams } from '../utils/transactionParams';
 import { useToast } from '../context/ToastContext';
 import FilterBar from '../components/common/FilterBar';
 import Badge from '../components/common/Badge';
-import AmountDisplay from '../components/common/AmountDisplay';
+import TransactionAmount from '../components/common/TransactionAmount';
 import EmptyState from '../components/common/EmptyState';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Modal from '../components/common/Modal';
@@ -19,7 +19,7 @@ import SavedViews from '../components/transactions/SavedViews';
 import { formatDate, transactionTypeLabel } from '../utils/formatters';
 import { getThisMonthRange } from '../utils/datePresets';
 import { downloadBlob, csvTimestamp } from '../utils/transactionCsv';
-import TypeIcon, { getVariant } from '../components/common/TypeIcon';
+import TypeIcon from '../components/common/TypeIcon';
 
 // ---------------------------------------------------------------------------
 // Sort header button (desktop table)
@@ -116,11 +116,7 @@ function TransactionRow({ txn, onClick }) {
 
       {/* Amount */}
       <td className="py-4 px-3 text-right whitespace-nowrap">
-        <AmountDisplay
-          amount={txn.amount ?? 0}
-          variant={getVariant(txn.type)}
-          className="text-sm"
-        />
+        <TransactionAmount txn={txn} className="text-sm" />
       </td>
 
       {/* Status badge */}
@@ -152,11 +148,7 @@ function TransactionCard({ txn, onClick }) {
           {txn.platform && ` · ${txn.platform}`}
         </p>
       </div>
-      <AmountDisplay
-        amount={txn.amount ?? 0}
-        variant={getVariant(txn.type)}
-        className="text-sm font-bold flex-shrink-0"
-      />
+      <TransactionAmount txn={txn} className="text-sm font-bold flex-shrink-0" />
     </button>
   );
 }
@@ -278,7 +270,6 @@ export default function TransactionsPage() {
   }, [setSearchParams]);
 
   const [selectedTxn, setSelectedTxn] = useState(null);
-  const [splitMode, setSplitMode] = useState('my_share');
   const [csvBusy, setCsvBusy] = useState(false);
   // Multi-column sort chain (local UI state). Maps to DRF ?ordering=.
   const [sortChain, setSortChain] = useState([]);
@@ -293,7 +284,7 @@ export default function TransactionsPage() {
     ordering,
     pageSize: PAGE_SIZE,
   });
-  const { summary, isLoading: summaryLoading } = useTransactionSummary(filters, splitMode);
+  const { summary, isLoading: summaryLoading } = useTransactionSummary(filters);
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
@@ -378,8 +369,6 @@ export default function TransactionsPage() {
         <TransactionSummary
           summary={summary}
           isLoading={summaryLoading}
-          splitMode={splitMode}
-          onSplitModeChange={setSplitMode}
         />
       </Card>
 

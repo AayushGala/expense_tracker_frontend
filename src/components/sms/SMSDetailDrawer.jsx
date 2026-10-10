@@ -10,7 +10,7 @@ import SMSStatusBadge from './SMSStatusBadge';
 import {
   inputClass, labelClass, errorClass, accountOption, categoryOptions,
 } from '../../utils/formStyles';
-import { formatDate, formatINR } from '../../utils/formatters';
+import { beneficiaryLabel, formatDate, formatINR } from '../../utils/formatters';
 import { effectiveSmsStatus } from '../../utils/sms';
 import { D, round2 } from '../../utils/money';
 
@@ -540,7 +540,7 @@ function LinkedTransaction({ txn, loading, accountMap }) {
         <ParsedRow label="To Account" value={accountName(toEntry)} />
         <ParsedRow label="Category" value={txn.category_name || (txn.category_names ?? []).join(', ') || '—'} />
         <ParsedRow label="Date" value={txn.date || '—'} />
-        <ParsedRow label="Beneficiary" value={txn.beneficiary || '—'} />
+        <ParsedRow label="Beneficiary" value={beneficiaryLabel(txn.beneficiary) || '—'} />
         <ParsedRow label="Owner" value={txn.owner || '—'} />
         {txn.notes && <ParsedRow label="Notes" value={txn.notes} />}
       </dl>

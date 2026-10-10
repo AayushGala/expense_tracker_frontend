@@ -207,7 +207,7 @@ export default function TransactionForm() {
     else navigate(fromSmsId ? '/sms' : '/transactions');
   }
   const {
-    accounts, categories, receivables,
+    accounts, categories, receivables, isLoading: dataLoading,
     addTransaction, updateTransaction, book_closed_through,
   } = useData();
   const { getAccountOwner } = useOwners();
@@ -264,10 +264,18 @@ export default function TransactionForm() {
     };
   }, [refundDetail, categories, getAccountOwner]);
 
+  // Edits made in the SMS confirm dialog before "Use full form".
+  const smsDialogValues = location.state?.smsDialogValues ?? null;
+
   // null until the SMS fetch resolves; the effect below dispatches
   // LOAD_INITIAL once it does.
   const fromSmsInitialData = useMemo(() => {
     if (!fromSms) return null;
+    if (smsDialogValues) {
+      // Dialog notes start empty; fall back to the SMS body as the parsed
+      // path does.
+      return { ...smsDialogValues, notes: smsDialogValues.notes || (fromSms.body ?? '') };
+    }
     // Prefer the LLM-classified transaction_type when available; otherwise
     // fall back to direction-derived expense/income.
     const txnType =
@@ -294,7 +302,7 @@ export default function TransactionForm() {
       }
     }
     return base;
-  }, [fromSms]);
+  }, [fromSms, smsDialogValues]);
 
   // Edit and refund flows seed the initial state synchronously; SMS prefill
   // arrives later via the effect below (async fetch).
@@ -328,19 +336,29 @@ export default function TransactionForm() {
   }, [editInitialData, refundInitialData, receivables]);
 
   // Don't overwrite edit/refund prefill with SMS data (those URL params
-  // combined with ?from_sms would be contradictory).
+  // combined with ?from_sms would be contradictory). Waits for accounts so the
+  // owner can be derived from the account the money moved through (picking an
+  // account by hand does the same via the account select's onChange).
+  const smsLoadedRef = useRef(false);
   useEffect(() => {
-    if (!fromSmsInitialData) return;
+    if (!fromSmsInitialData || dataLoading || smsLoadedRef.current) return;
     if (isEditing || refundInitialData) return;
+    smsLoadedRef.current = true;
+    const ownerAccountId = fromSmsInitialData.type === 'income'
+      ? fromSmsInitialData.to_account_id
+      : fromSmsInitialData.from_account_id;
     dispatch({
       type: 'LOAD_INITIAL',
       payload: {
         type: fromSmsInitialData.type,
-        values: valuesFromInitialData(fromSmsInitialData) ?? {},
+        values: valuesFromInitialData({
+          ...fromSmsInitialData,
+          owner: ownerAccountId ? getAccountOwner(ownerAccountId) : '',
+        }) ?? {},
       },
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromSmsInitialData]);
+  }, [fromSmsInitialData, dataLoading]);
 
   async function handleSubmit(transactionData) {
     if (state.submitting) return;

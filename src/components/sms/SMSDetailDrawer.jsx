@@ -236,11 +236,24 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
   }
 
   function handleUseFullForm() {
-    // For types the inline confirm form can't express (transfer, bill_payment,
-    // investment, refund, split) — TransactionForm reads `?from_sms` and the
-    // backend links the SMS on save via `sms_id`.
+    // For what the inline confirm form can't express (refund, split, fees,
+    // owner, tags) — TransactionForm reads `?from_sms` and the backend links
+    // the SMS on save via `sms_id`. The dialog's edits ride along in router
+    // state so the full form starts from them instead of the parsed fields.
+    const dialogValues = {
+      type: values.type,
+      amount: values.amount,
+      date: values.date,
+      category_id: TYPES_WITH_CATEGORY.has(values.type) ? values.category_id : '',
+      beneficiary: values.beneficiary_type === 'custom'
+        ? (values.custom_beneficiary ?? '').trim()
+        : values.beneficiary_type,
+      notes: values.notes,
+    };
+    if (TYPES_WITH_FROM_ACCOUNT.has(values.type)) dialogValues.from_account_id = values.from_account_id;
+    if (TYPES_WITH_TO_ACCOUNT.has(values.type)) dialogValues.to_account_id = values.to_account_id;
     onClose?.();
-    navigate(`/transactions/new?from_sms=${sms.id}`);
+    navigate(`/transactions/new?from_sms=${sms.id}`, { state: { smsDialogValues: dialogValues } });
   }
 
   if (!sms) return null;

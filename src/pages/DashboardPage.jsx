@@ -4,12 +4,11 @@ import { useUrlFilters } from '../hooks/useUrlFilters';
 import { sum, ZERO } from '../utils/money';
 import { useAccounts } from '../hooks/useAccounts';
 import { useHideAmounts } from '../hooks/useHideAmounts';
+import { SMS_REVIEW_WINDOW, useSmsReviewCount } from '../hooks/useSmsReviewCount';
 import { useOwners } from '../hooks/useOwners';
 import { useMonthReview } from '../hooks/useReportData';
-import { useApiResource } from '../hooks/useApiResource';
 import { useData } from '../context/DataContext';
 import { useTransactions } from '../hooks/useTransactions';
-import api from '../api/client';
 import Card from '../components/common/Card';
 import Badge from '../components/common/Badge';
 import AmountDisplay from '../components/common/AmountDisplay';
@@ -113,17 +112,18 @@ function NetWorthCard({ accountsByType, balances, netWorth }) {
         <AmountDisplay amount={netWorth} hidden={hidden} className="text-3xl font-bold" />
       </div>
 
-      <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
-        <div>
-          <p className="text-[11px] text-gray-400 mb-0.5 font-medium">Assets</p>
+      {/* Phone: one row per figure (three side by side overflow); sm+: columns. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 pt-3 border-t border-gray-100">
+        <div className="flex items-baseline justify-between sm:block">
+          <p className="text-[11px] text-gray-400 sm:mb-0.5 font-medium">Assets</p>
           <AmountDisplay amount={totalAssets} variant="income" hidden={hidden} className="text-sm font-bold" />
         </div>
-        <div>
-          <p className="text-[11px] text-gray-400 mb-0.5 font-medium">Liabilities</p>
+        <div className="flex items-baseline justify-between sm:block">
+          <p className="text-[11px] text-gray-400 sm:mb-0.5 font-medium">Liabilities</p>
           <AmountDisplay amount={totalLiability} variant="expense" hidden={hidden} className="text-sm font-bold" />
         </div>
-        <div>
-          <p className="text-[11px] text-gray-400 mb-0.5 font-medium">Receivable</p>
+        <div className="flex items-baseline justify-between sm:block">
+          <p className="text-[11px] text-gray-400 sm:mb-0.5 font-medium">Receivable</p>
           <AmountDisplay amount={totalReceivable} hidden={hidden} className="text-sm font-bold" />
         </div>
       </div>
@@ -218,27 +218,19 @@ function ThisMonthCard({ filters }) {
 // SmsToReview — nudge while parsed SMS wait for confirmation
 // ---------------------------------------------------------------------------
 
-const TO_REVIEW_STATUSES = ['pending', 'parsed', 'failed'];
-
 function SmsToReview() {
-  const { dataVersion } = useData();
-  const { data } = useApiResource(() => {
-    const params = new URLSearchParams({ page_size: '1' });
-    for (const s of TO_REVIEW_STATUSES) params.append('status', s);
-    return api.getSMSMessages(params);
-  }, [dataVersion ?? 0]);
-  const count = data?.count ?? 0;
+  const count = useSmsReviewCount();
   if (count === 0) return null;
 
   return (
-    <Link to="/sms/review" className="block">
+    <Link to={`/sms/review?since=${SMS_REVIEW_WINDOW}`} className="block">
       <Card className="px-5 py-3.5 flex items-center justify-between gap-3 hover:shadow-md transition-shadow">
         <div className="flex items-center gap-3 min-w-0">
           <span className="flex h-8 min-w-8 px-2 shrink-0 items-center justify-center rounded-xl bg-accent-light text-sm font-bold text-brand tabular-nums">
             {count}
           </span>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-800">SMS to review</p>
+            <p className="text-sm font-semibold text-gray-800">SMS to review <span className="font-normal text-gray-400">· last 30 days</span></p>
             <p className="text-xs text-gray-400">Totals are incomplete until you confirm them.</p>
           </div>
         </div>

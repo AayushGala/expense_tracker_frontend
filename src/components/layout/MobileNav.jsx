@@ -1,4 +1,7 @@
-import { NavLink } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { useSmsReviewCount } from '../../hooks/useSmsReviewCount';
 
 function IconHome() {
   return (
@@ -65,44 +68,123 @@ function IconReceivables() {
   );
 }
 
-const NAV_ITEMS = [
-  { to: '/',             label: 'Home',         Icon: IconHome,      end: true },
-  { to: '/transactions', label: 'Transactions', Icon: IconList              },
-  { to: '/accounts',     label: 'Accounts',     Icon: IconWallet            },
-  { to: '/receivables',  label: 'Owed',         Icon: IconReceivables       },
-  { to: '/reports',      label: 'Reports',      Icon: IconBarChart          },
-  { to: '/sms',          label: 'SMS',          Icon: IconSms               },
-  { to: '/settings',     label: 'Settings',     Icon: IconSettings          },
+function IconMore() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="19" cy="12" r="1.8" />
+    </svg>
+  );
+}
+
+function IconPlus() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+// Bar: the phone-first destinations around a central Add. Everything else
+// lives in the More sheet.
+const MORE_ITEMS = [
+  { to: '/accounts',    label: 'Accounts',    Icon: IconWallet },
+  { to: '/receivables', label: 'Receivables', Icon: IconReceivables },
+  { to: '/reports',     label: 'Reports',     Icon: IconBarChart },
+  { to: '/settings',    label: 'Settings',    Icon: IconSettings },
 ];
 
-export default function MobileNav() {
+const tabClass = (active) => [
+  'relative flex w-full flex-col items-center gap-0.5 px-1 py-2.5 text-[10px] font-semibold transition-colors',
+  active ? 'text-accent' : 'text-gray-400 hover:text-gray-600',
+].join(' ');
+
+function Tab({ to, label, Icon, end, badge }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200/80 bg-white/95 backdrop-blur-lg md:hidden">
-      <ul className="flex">
-        {NAV_ITEMS.map(({ to, label, Icon, end }) => (
-          <li key={to} className="flex-1">
-            <NavLink
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                [
-                  'flex flex-col items-center gap-0.5 px-1 py-2.5 text-[10px] font-semibold transition-colors',
-                  isActive ? 'text-accent' : 'text-gray-400 hover:text-gray-600',
-                ].join(' ')
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <span className={isActive ? 'text-accent' : 'text-gray-400'}>
-                    <Icon />
-                  </span>
+    <NavLink to={to} end={end} className={({ isActive }) => tabClass(isActive)}>
+      <span className="relative">
+        <Icon />
+        {badge > 0 && (
+          <span className="absolute -right-2.5 -top-1.5 min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[9px] font-bold leading-4 text-white tabular-nums">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </span>
+      {label}
+    </NavLink>
+  );
+}
+
+export default function MobileNav() {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const smsToReview = useSmsReviewCount();
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  // Close the sheet whenever the page changes.
+  useEffect(() => { setMoreOpen(false); }, [pathname]);
+  useEscapeKey(moreOpen, () => setMoreOpen(false));
+
+  const moreActive = MORE_ITEMS.some((i) => pathname.startsWith(i.to));
+
+  return (
+    <>
+      {moreOpen && (
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMoreOpen(false)}>
+          <div className="absolute inset-0 bg-gray-900/30" />
+          <div
+            className="absolute inset-x-0 bottom-[60px] rounded-t-2xl bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="grid grid-cols-2 gap-2">
+              {MORE_ITEMS.map(({ to, label, Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) => [
+                    'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors',
+                    isActive ? 'bg-accent-light text-brand' : 'text-gray-600 hover:bg-gray-50',
+                  ].join(' ')}
+                >
+                  <Icon />
                   {label}
-                </>
-              )}
-            </NavLink>
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-200/80 bg-white/95 backdrop-blur-lg md:hidden">
+        <ul className="flex items-end">
+          <li className="flex-1"><Tab to="/" label="Home" Icon={IconHome} end /></li>
+          <li className="flex-1"><Tab to="/transactions" label="Transactions" Icon={IconList} /></li>
+          <li className="flex-1 flex justify-center">
+            <button
+              type="button"
+              onClick={() => navigate('/transactions/new')}
+              aria-label="Add transaction"
+              className="-mt-5 mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-white shadow-lg shadow-brand/30 transition-all hover:bg-brand-hover active:scale-95"
+            >
+              <IconPlus />
+            </button>
           </li>
-        ))}
-      </ul>
-    </nav>
+          <li className="flex-1"><Tab to="/sms" label="SMS" Icon={IconSms} badge={smsToReview} /></li>
+          <li className="flex-1">
+            <button
+              type="button"
+              onClick={() => setMoreOpen((o) => !o)}
+              aria-expanded={moreOpen}
+              className={tabClass(moreOpen || moreActive)}
+            >
+              <IconMore />
+              More
+            </button>
+          </li>
+        </ul>
+      </nav>
+    </>
   );
 }

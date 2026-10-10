@@ -41,6 +41,9 @@ export default function SMSReviewPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const rawSince = searchParams.get('since');
   const since = REVIEW_WINDOWS.some((w) => w.value === rawSince) ? rawSince : '1';
+  // 'review' (default): only SMS still waiting, oldest first like a to-do
+  // list. 'all': confirmed too, newest first, for checking past ones.
+  const show = searchParams.get('show') === 'all' ? 'all' : 'review';
 
   const [items, setItems] = useState([]);
   const [index, setIndex] = useState(0);
@@ -54,10 +57,10 @@ export default function SMSReviewPage() {
       const params = new URLSearchParams();
       const dateFrom = windowDateFrom(since);
       if (dateFrom) params.set('date_from', dateFrom);
-      // Everything except ignored — confirmed stays reviewable.
-      for (const s of ['pending', 'parsed', 'confirmed', 'failed']) {
-        params.append('status', s);
-      }
+      const statuses = show === 'all'
+        ? ['pending', 'parsed', 'confirmed', 'failed']
+        : ['pending', 'parsed', 'failed'];
+      for (const s of statuses) params.append('status', s);
       let results = [];
       let page = 1;
       // The API paginates at 50; follow pages up to the cap.
@@ -68,8 +71,8 @@ export default function SMSReviewPage() {
         results = results.concat(batch);
         if (Array.isArray(data) || !data.next) break;
       }
-      // Chronological: review the day in the order it happened.
-      results.sort((a, b) => (a.received_at < b.received_at ? -1 : 1));
+      const dir = show === 'all' ? -1 : 1;
+      results.sort((a, b) => (a.received_at < b.received_at ? -dir : dir));
       setItems(results);
       setIndex(0);
     } catch (err) {
@@ -77,15 +80,22 @@ export default function SMSReviewPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [since]);
+  }, [since, show]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
   const current = items[index] ?? null;
 
-  function setSince(value) {
-    setSearchParams(value === '1' ? {} : { since: value });
+  function setParam(key, value, fallback) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value === fallback) next.delete(key);
+      else next.set(key, value);
+      return next;
+    });
   }
+  const setSince = (value) => setParam('since', value, '1');
+  const setShow = (value) => setParam('show', value, 'review');
 
   function goto(delta) {
     setIndex((i) => Math.min(Math.max(i + delta, 0), items.length - 1));
@@ -125,6 +135,21 @@ export default function SMSReviewPage() {
         </Link>
       </div>
 
+      <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 text-xs">
+        {[['review', 'To review'], ['all', 'All (incl. confirmed)']].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setShow(value)}
+            className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
+              show === value ? 'bg-brand text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>
       ) : error ? (
@@ -133,7 +158,9 @@ export default function SMSReviewPage() {
         <div className="bg-white rounded-2xl border border-gray-200 py-16 px-6 text-center">
           <p className="text-3xl mb-2">🎉</p>
           <p className="text-sm font-semibold text-gray-700">All caught up</p>
-          <p className="mt-1 text-xs text-gray-400">No SMS to review in this window.</p>
+          <p className="mt-1 text-xs text-gray-400">
+            {show === 'all' ? 'No SMS in this window.' : 'No SMS to review in this window.'}
+          </p>
         </div>
       ) : (
         <ReviewCard
@@ -448,7 +475,7 @@ function ReviewCard({ sms, position, total, onPrev, onNext, onSmsUpdated, onIgno
                 <label className={labelClass}>Beneficiary</label>
                 <input
                   type="text"
-                  value={values.beneficiary}
+                  value={beneficiaryLabel(values.beneficiary)}
                   onChange={(e) => changeField('beneficiary', e.target.value)}
                   className={inputClass}
                 />

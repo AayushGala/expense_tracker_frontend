@@ -33,7 +33,9 @@ export function transactionTypeLabel(type) {
     bill_payment: 'Bill Payment',
     investment: 'Investment',
     split_expense: 'Split Expense',
-    reimbursement: 'Reimbursement',
+    // Both record money with a person; named by which way the balance moves.
+    reimbursement: 'From person',
+    payout: 'To person',
   };
   return labels[type] ?? type;
 }

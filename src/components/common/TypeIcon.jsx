@@ -6,6 +6,7 @@ const TYPE_ICONS = {
   investment: { bg: 'bg-gray-100', color: 'text-gray-500', path: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' },
   split_expense: { bg: 'bg-brand/10', color: 'text-brand', path: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
   reimbursement: { bg: 'bg-accent-light', color: 'text-accent', path: 'M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6' },
+  payout: { bg: 'bg-brand/10', color: 'text-brand', path: 'M21 10H11a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6' },
 };
 
 export default function TypeIcon({ type }) {
@@ -21,6 +22,6 @@ export default function TypeIcon({ type }) {
 
 export function getVariant(type) {
   if (type === 'income' || type === 'reimbursement') return 'income';
-  if (type === 'expense' || type === 'bill_payment' || type === 'split_expense') return 'expense';
+  if (type === 'expense' || type === 'bill_payment' || type === 'split_expense' || type === 'payout') return 'expense';
   return 'neutral';
 }

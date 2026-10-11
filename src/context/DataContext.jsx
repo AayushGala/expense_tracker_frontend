@@ -158,8 +158,7 @@ function transformReceivable(r) {
   return {
     ...r,
     transaction_id: r.transaction,
-    amount_owed: D(r.amount_owed),
-    amount_settled: D(r.amount_settled),
+    amount: D(r.amount),
   };
 }
 

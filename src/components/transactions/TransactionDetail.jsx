@@ -133,7 +133,7 @@ export default function TransactionDetail({
 
   let fromName = null;
   let toName = null;
-  if (type === 'expense' || type === 'split_expense') {
+  if (type === 'expense' || type === 'split_expense' || type === 'payout') {
     fromName = creditAccount ? accountMap.get(creditAccount.account_id)?.name : null;
   } else if (type === 'income' || type === 'reimbursement') {
     toName = debitAccount ? accountMap.get(debitAccount.account_id)?.name : null;

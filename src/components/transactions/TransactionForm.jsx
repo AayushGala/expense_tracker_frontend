@@ -99,10 +99,31 @@ function buildInitialData(transaction, entries, accounts, receivables) {
       };
     }
     case 'reimbursement':
-      // Settled without money: the DEBIT is on a category, not an account.
-      return debitCategoryEntry
-        ? { ...base, settle_mode: 'category', category_id: debitCategoryEntry.category_id }
-        : { ...base, to_account_id: debitAccountEntry?.account_id ?? '' };
+    case 'payout': {
+      // Both edit in the reimbursement form. The receivable account is one
+      // side; the other is an account (money) or a category (paid for me,
+      // write-off).
+      const receivableIds = new Set(accounts.filter((a) => a.type === 'receivable').map((a) => a.id));
+      const receivableEntry = accountEntries.find((e) => receivableIds.has(e.account_id));
+      const other = txnEntries.find((e) => e !== receivableEntry);
+      const person = {
+        ...base,
+        type: 'reimbursement',
+        settle_type: transaction.type,
+        person_name: txnReceivables[0]?.person_name ?? '',
+        receivable_account_id: receivableEntry?.account_id ?? '',
+        amount: receivableEntry?.amount ?? amount,
+      };
+      if (other?.category_id) return { ...person, settle_mode: 'category', category_id: other.category_id };
+      if (transaction.type === 'reimbursement') {
+        return { ...person, settle_mode: 'money', to_account_id: other?.account_id ?? '' };
+      }
+      // A payout from an account that says what it paid for was "paid for them".
+      const forCategory = transaction.category_id;
+      return forCategory
+        ? { ...person, settle_mode: 'paid_for_them', from_account_id: other?.account_id ?? '', for_category_id: forCategory }
+        : { ...person, settle_mode: 'money_out', from_account_id: other?.account_id ?? '' };
+    }
     default:
       return base;
   }
@@ -111,7 +132,7 @@ function buildInitialData(transaction, entries, accounts, receivables) {
 // Flattens a typed initialData object (per-type field names) into the
 // reducer's unified values bag, which is shared across types so state
 // survives type-switches.
-function valuesFromInitialData(initialData, ctx = {}) {
+function valuesFromInitialData(initialData) {
   if (!initialData) return null;
   const v = {};
 
@@ -124,6 +145,10 @@ function valuesFromInitialData(initialData, ctx = {}) {
   if (initialData.tags != null) v.tags = initialData.tags;
   if (initialData.owner != null) v.owner = initialData.owner;
   if (initialData.settle_mode) v.settle_mode = initialData.settle_mode;
+  if (initialData.settle_type) v.settle_type = initialData.settle_type;
+  if (initialData.person_name != null) v.person_name = initialData.person_name;
+  if (initialData.receivable_account_id) v.receivable_account_id = String(initialData.receivable_account_id);
+  if (initialData.for_category_id) v.for_category_id = String(initialData.for_category_id);
 
   // ExpenseForm splits beneficiary into a type + custom-text pair; IncomeForm
   // reads the raw string. Maintain both so either form can edit.
@@ -170,23 +195,9 @@ function valuesFromInitialData(initialData, ctx = {}) {
     v.other_people = initialData.receivables.map((r) => ({
       id: makePersonId(),
       name: r.person_name ?? '',
-      amount: String(r.amount_owed ?? ''),
+      amount: String(r.amount ?? ''),
     }));
     v.total_people = String(initialData.receivables.length + 1);
-  }
-
-  // Heuristic — match by amount_settled within rounding tolerance, since the
-  // settled-receivable id isn't stored on the transaction directly.
-  if (
-    initialData.type === 'reimbursement' &&
-    ctx.receivables &&
-    initialData.amount != null
-  ) {
-    const settled = parseFloat(initialData.amount);
-    const match = (ctx.receivables ?? []).find(
-      (r) => r.amount_settled > 0 && Math.abs(r.amount_settled - settled) < 0.01,
-    );
-    if (match) v.selected_receivable_id = String(match.id);
   }
 
   return v;
@@ -199,7 +210,7 @@ export default function TransactionForm() {
   const [searchParams] = useSearchParams();
   const refundOfId = searchParams.get('refund_of');
   const fromSmsId = searchParams.get('from_sms');
-  // ?type= preselects the type of a new transaction (e.g. from Receivables).
+  // ?type= preselects the type of a new transaction (e.g. from People).
   const typeParam = searchParams.get('type');
 
   // Return to the exact view the form was opened from (filters, page) on
@@ -211,7 +222,7 @@ export default function TransactionForm() {
     else navigate(fromSmsId ? '/sms' : '/transactions');
   }
   const {
-    accounts, categories, receivables, isLoading: dataLoading,
+    accounts, categories, isLoading: dataLoading,
     addTransaction, invalidate, updateTransaction, book_closed_through,
   } = useData();
   const { getAccountOwner } = useOwners();
@@ -315,7 +326,7 @@ export default function TransactionForm() {
     if (initial) {
       return makeInitialState({
         type: initial.type,
-        initialValues: valuesFromInitialData(initial, { receivables }) ?? undefined,
+        initialValues: valuesFromInitialData(initial) ?? undefined,
       });
     }
     return makeInitialState(
@@ -336,10 +347,10 @@ export default function TransactionForm() {
       type: 'LOAD_INITIAL',
       payload: {
         type: initial.type,
-        values: valuesFromInitialData(initial, { receivables }) ?? {},
+        values: valuesFromInitialData(initial) ?? {},
       },
     });
-  }, [editInitialData, refundInitialData, receivables]);
+  }, [editInitialData, refundInitialData]);
 
   // Don't overwrite edit/refund prefill with SMS data (those URL params
   // combined with ?from_sms would be contradictory). Waits for accounts so the
@@ -379,12 +390,13 @@ export default function TransactionForm() {
       if (isEditing) {
         await updateTransaction(parseInt(id), payload);
         toast.success('Transaction updated');
-      } else if (payload.type === 'reimbursement' && payload.person_name) {
-        // A new reimbursement settles a person's total, oldest split first.
+      } else if (payload.type === 'reimbursement' && payload.mode) {
+        // A new movement with a person goes through settle, which picks the
+        // type (reimbursement or payout) and the write-off direction.
         const { type: _type, ...settle } = payload;
-        const result = await api.settleReceivables(settle);
+        await api.settleReceivables(settle);
         invalidate();
-        toast.success(result.count > 1 ? `Settled across ${result.count} splits` : 'Reimbursement saved');
+        toast.success('Saved');
       } else {
         await addTransaction(payload);
         toast.success(fromSmsId ? 'Transaction created and SMS confirmed' : 'Transaction saved');

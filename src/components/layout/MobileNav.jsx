@@ -57,7 +57,7 @@ function IconSettings() {
   );
 }
 
-function IconReceivables() {
+function IconPeople() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
@@ -91,7 +91,7 @@ function IconPlus() {
 // lives in the More sheet.
 const MORE_ITEMS = [
   { to: '/accounts',    label: 'Accounts',    Icon: IconWallet },
-  { to: '/receivables', label: 'Receivables', Icon: IconReceivables },
+  { to: '/people',      label: 'People',      Icon: IconPeople },
   { to: '/reports',     label: 'Reports',     Icon: IconBarChart },
   { to: '/settings',    label: 'Settings',    Icon: IconSettings },
 ];

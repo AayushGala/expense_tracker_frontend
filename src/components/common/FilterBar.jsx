@@ -16,7 +16,8 @@ const TRANSACTION_TYPES = [
   { value: 'bill_payment',  label: 'Bill Payment' },
   { value: 'investment',    label: 'Investment' },
   { value: 'split_expense', label: 'Split Expense' },
-  { value: 'reimbursement', label: 'Reimbursement' },
+  { value: 'reimbursement', label: 'From person' },
+  { value: 'payout',        label: 'To person' },
 ];
 
 export default function FilterBar({ filters = {}, onChange, onBulkChange, onReset, className = '' }) {

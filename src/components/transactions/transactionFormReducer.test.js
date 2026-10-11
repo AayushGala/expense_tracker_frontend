@@ -157,8 +157,8 @@ describe('SET_TYPE', () => {
     ['transfer',      'expense',      { from_account_id: '1', to_account_id: '2' }, '1', ''],
     // dual -> single-to: keep to, drop from
     ['transfer',      'income',       { from_account_id: '1', to_account_id: '2' }, '',  '2'],
-    // reimbursement (single-to) -> expense (single-from): promote
-    ['reimbursement', 'expense',      { to_account_id: '9' }, '9',  ''],
+    // reimbursement (dual: money in or out) -> expense: keep from, drop to
+    ['reimbursement', 'expense',      { from_account_id: '8', to_account_id: '9' }, '8',  ''],
   ])('carryAccount: %s -> %s', (from, to, seed, expectFrom, expectTo) => {
     const s0 = withValues(from, seed);
     const s1 = transactionFormReducer(s0, { type: 'SET_TYPE', value: to });
@@ -210,8 +210,8 @@ describe('SET_TYPE', () => {
     ],
     [
       'reimbursement', 'income',
-      { selected_receivable_id: '11' },
-      ['selected_receivable_id'],
+      { person_name: 'Aditi', settle_mode: 'money_out' },
+      ['person_name', 'settle_mode'],
     ],
     [
       'income', 'expense',

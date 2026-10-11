@@ -32,7 +32,7 @@ const TYPE_FIELDS = {
   bill_payment:  ['from_account_id', 'to_account_id'],
   investment:    ['from_account_id', 'to_account_id'],
   split_expense: ['from_account_id', 'category_id', 'total_people', 'my_share_type', 'custom_my_share', 'other_people'],
-  reimbursement: ['to_account_id',   'selected_receivable_id', 'selected_person', 'settle_mode', 'category_id'],
+  reimbursement: ['to_account_id',   'from_account_id', 'person_name', 'settle_mode', 'settle_type', 'receivable_account_id', 'category_id', 'for_category_id'],
 };
 
 export const FIELD_DEFAULTS = {
@@ -55,11 +55,16 @@ export const FIELD_DEFAULTS = {
   my_share_type: 'equal',
   custom_my_share: '',
   other_people: [],
-  selected_receivable_id: '',
-  selected_person: '',
-  // Reimbursement: 'money' (into an account), 'paid_for_me' (an expense
-  // category), 'write_off' (Lost & Found); 'category' on edit until resolved.
+  // Reimbursement form (also edits payouts): whose balance moves, and how:
+  // 'money' (into an account), 'money_out' (from an account), 'paid_for_me'
+  // (an expense category), 'write_off' (Lost & Found); 'category' on edit
+  // until resolved. settle_type is the type being edited.
+  person_name: '',
   settle_mode: 'money',
+  settle_type: '',
+  receivable_account_id: '',
+  // Paid for them: what it was for (kept on the transaction, not spending).
+  for_category_id: '',
 };
 
 function todayIso() {

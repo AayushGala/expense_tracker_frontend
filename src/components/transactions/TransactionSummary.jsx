@@ -23,24 +23,30 @@ function StatBlock({ label, value, variant = 'neutral', format = 'currency', hid
   );
 }
 
-function MovementPill({ icon, count, label, amount, suffix, hidden }) {
+function MovementPill({ icon, count, label, amount, hidden }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600">
       <span aria-hidden>{icon}</span>
       <span className="font-medium">{count} {label}{count === 1 ? '' : 's'}</span>
-      <span className="text-gray-400 tabular-nums">{hidden ? MASK : formatINR(amount)}{suffix && ` ${suffix}`}</span>
+      <span className="text-gray-400 tabular-nums">{hidden ? MASK : formatINR(amount)}</span>
     </span>
   );
 }
 
-// Others' share of the period's splits, then what is still owed on them
-// once settlements (money back, paid for me, write-off) are taken off.
-function splitSuffix(summary, hidden) {
-  const paid = Number(summary.split_others_amount ?? 0);
-  const left = Number(summary.split_outstanding ?? paid);
-  if (left <= 0) return '· all settled';
-  if (left >= paid) return 'to get back';
-  return `· ${hidden ? MASK : formatINR(left)} left to get back`;
+// Today's balances with people (all time, not limited by the filters).
+function PeoplePill({ oweYou, youOwe, hidden }) {
+  const money = (v) => (hidden ? MASK : formatINR(v));
+  const parts = [
+    oweYou > 0 && `people owe you ${money(oweYou)}`,
+    youOwe > 0 && `you owe ${money(youOwe)}`,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600">
+      <span aria-hidden>👥</span>
+      <span className="tabular-nums">{parts.join(' · ')}</span>
+    </span>
+  );
 }
 
 export default function TransactionSummary({ summary, isLoading }) {
@@ -54,12 +60,16 @@ export default function TransactionSummary({ summary, isLoading }) {
   if (!summary) return null;
 
   const movements = [
-    { key: 'split', icon: '⇄', label: 'split expense', count: summary.split_count, amount: summary.split_others_amount, suffix: splitSuffix(summary, hidden) },
+    { key: 'split', icon: '⇄', label: 'split expense', count: summary.split_count, amount: summary.split_others_amount },
     { key: 'transfer', icon: '↔', label: 'transfer', count: summary.transfer_count, amount: summary.transfer_amount },
     { key: 'investment', icon: '📈', label: 'investment', count: summary.investment_count, amount: summary.investment_amount },
     { key: 'bill_payment', icon: '💳', label: 'bill payment', count: summary.bill_payment_count, amount: summary.bill_payment_amount },
     { key: 'reimbursement', icon: '↩', label: 'reimbursement', count: summary.reimbursement_count, amount: summary.reimbursement_amount },
+    { key: 'payout', icon: '↪', label: 'payout', count: summary.payout_count, amount: summary.payout_amount },
   ].filter((m) => (m.count ?? 0) > 0 && (m.key !== 'split' || Number(m.amount) > 0));
+
+  const oweYou = Number(summary.people_owe_you ?? 0);
+  const youOwe = Number(summary.you_owe_people ?? 0);
 
   // Spending counts only the user's share of split expenses; it is split by
   // beneficiary (self or blank vs family/named people). Net covers both.
@@ -76,7 +86,7 @@ export default function TransactionSummary({ summary, isLoading }) {
         <StatBlock label="Count" value={summary.count} format="plain" />
       </div>
 
-      {movements.length > 0 && (
+      {(movements.length > 0 || oweYou > 0 || youOwe > 0) && (
         <div className="pt-2 border-t border-gray-100">
           <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">
             Other movements (not counted above)
@@ -89,10 +99,10 @@ export default function TransactionSummary({ summary, isLoading }) {
                 count={m.count}
                 label={m.label}
                 amount={m.amount}
-                suffix={m.suffix}
                 hidden={hidden}
               />
             ))}
+            <PeoplePill oweYou={oweYou} youOwe={youOwe} hidden={hidden} />
           </div>
         </div>
       )}

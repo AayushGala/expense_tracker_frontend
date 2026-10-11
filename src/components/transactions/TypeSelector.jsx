@@ -30,7 +30,7 @@ export default function TypeSelector({ value, onChange, disabled = false }) {
               }
             `}
           >
-            {transactionTypeLabel(type)}
+            {type === 'reimbursement' ? 'People' : transactionTypeLabel(type)}
           </button>
         );
       })}

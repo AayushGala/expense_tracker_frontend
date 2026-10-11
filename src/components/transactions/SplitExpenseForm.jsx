@@ -27,7 +27,10 @@ export default function SplitExpenseForm({ values, errors, dispatch, onSubmit, i
     (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false,
   );
   const expenseCategories = categories.filter((c) => c.type === 'expense');
-  const receivableAccount = accounts.find((a) => a.type === 'receivable') ?? null;
+  // The owner's receivable account, so each owner's net worth stays whole.
+  const receivableAccounts = accounts.filter((a) => a.type === 'receivable');
+  const receivableAccount = receivableAccounts.find((a) => a.owner && a.owner === values.owner)
+    ?? receivableAccounts[0] ?? null;
 
   function setField(name, value) {
     dispatch({ type: 'SET_FIELD', name, value });

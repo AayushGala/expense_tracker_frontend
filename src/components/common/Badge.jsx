@@ -8,6 +8,7 @@ const TYPE_STYLES = {
   investment:    'bg-gray-100 text-gray-600 ring-gray-200/60',
   split_expense: 'bg-brand text-white ring-brand/20',
   reimbursement: 'bg-accent-light text-brand ring-accent/30',
+  payout:        'bg-brand text-white ring-brand/20',
 };
 
 export default function Badge({ type, className = '' }) {

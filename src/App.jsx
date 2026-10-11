@@ -17,7 +17,7 @@ const RegisterPage    = lazy(() => import('./pages/RegisterPage'))
 const DashboardPage   = lazy(() => import('./pages/DashboardPage'))
 const TransactionsPage = lazy(() => import('./pages/TransactionsPage'))
 const AccountsPage    = lazy(() => import('./pages/AccountsPage'))
-const ReceivablesPage = lazy(() => import('./pages/ReceivablesPage'))
+const PeoplePage = lazy(() => import('./pages/PeoplePage'))
 const ReportsPage     = lazy(() => import('./pages/ReportsPage'))
 const CategoryInsightsPage = lazy(() => import('./pages/CategoryInsightsPage'))
 const SettingsPage    = lazy(() => import('./pages/SettingsPage'))
@@ -112,7 +112,9 @@ export default function App() {
                               <Route path="/transactions/new" element={<TransactionForm />} />
                               <Route path="/transactions/:id/edit" element={<TransactionForm />} />
                               <Route path="/accounts" element={<AccountsPage />} />
-                              <Route path="/receivables" element={<ReceivablesPage />} />
+                              <Route path="/people" element={<PeoplePage />} />
+                              {/* Old name of the People page; keeps bookmarks working. */}
+                              <Route path="/receivables" element={<Navigate to="/people" replace />} />
                               <Route path="/reports" element={<ReportsPage />} />
                               <Route path="/reports/categories/:id" element={<CategoryInsightsPage />} />
                               <Route path="/sms" element={<SMSPage />} />

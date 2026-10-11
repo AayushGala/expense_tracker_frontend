@@ -12,31 +12,20 @@ import HideAmountsToggle from '../components/common/HideAmountsToggle';
 import AccountPicker from '../components/forms/AccountPicker';
 import { formatDate, formatINR, MASKED_AMOUNT } from '../utils/formatters';
 import { labelClass, errorClass, categoryOptions } from '../utils/formStyles';
-import { D, ZERO, round2, sum } from '../utils/money';
+import { D, round2, sum } from '../utils/money';
+import {
+  balanceSentence, groupByPerson, settlingAmount, SETTLE_GROUPS, SETTLE_MODES,
+} from '../utils/people';
 
-// How a receivable gets settled. Each choice becomes one reimbursement per
-// receivable it touches (oldest first), server-side.
-const SETTLE_ACTIONS = {
-  money: {
-    button: 'Record payment',
-    title: 'Record a payment',
-    help: 'They paid you back into one of your accounts.',
-  },
-  paid_for_me: {
-    button: 'Paid for me',
-    title: 'They paid for something of yours',
-    help: 'It counts as your spending and reduces what they owe.',
-  },
-  write_off: {
-    button: 'Write off',
-    title: 'Write off',
-    help: 'You will not get this back. It moves to Lost & Found and does not count as spending.',
-  },
-};
+// Each mode records one movement in the person's balance, server-side.
+const MODES = Object.fromEntries(SETTLE_MODES.map((m) => [m.value, m]));
 
-const SETTLEMENT_TEXT = {
-  money: (s) => `Paid back into ${s.label}`,
-  paid_for_me: (s) => `Paid for your ${s.label}`,
+const MOVEMENT_TEXT = {
+  split: (m) => m.label || 'Split expense',
+  money_in: (m) => `Received into ${m.label}`,
+  money_out: (m) => `Sent from ${m.label}`,
+  paid_for_me: (m) => `Paid for your ${m.label}`,
+  paid_for_them: (m) => `Paid for their ${m.label}`,
   write_off: () => 'Written off',
 };
 
@@ -45,60 +34,67 @@ function todayLocal() {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
-// One entry per person (names match case-insensitively), newest split first.
-function groupByPerson(receivables) {
-  const people = new Map();
-  for (const r of receivables) {
-    const key = r.person_name.trim().toLowerCase();
-    if (!people.has(key)) people.set(key, { key, name: r.person_name.trim(), items: [] });
-    people.get(key).items.push({ ...r, outstanding: r.amount_owed.minus(r.amount_settled) });
-  }
-  return [...people.values()].map((p) => {
-    p.items.sort((a, b) => (b.transaction_date ?? '').localeCompare(a.transaction_date ?? '') || b.id - a.id);
-    p.owed = sum(p.items.map((i) => i.amount_owed));
-    p.outstanding = sum(p.items.map((i) => i.outstanding));
-    return p;
-  });
+function balanceText(balance) {
+  if (balance.gt(0)) return 'owes you';
+  if (balance.lt(0)) return 'you owe';
+  return 'settled';
 }
 
-export default function ReceivablesPage() {
+export default function PeoplePage() {
   const { receivables } = useData();
   const [hidden, toggleHidden] = useHideAmounts();
   const [view, setView] = useState('open');
   const [settling, setSettling] = useState(null); // { person, mode }
 
   const people = useMemo(() => groupByPerson(receivables ?? []), [receivables]);
-  const openPeople = people.filter((p) => p.outstanding.gt(0)).sort((a, b) => b.outstanding.comparedTo(a.outstanding));
-  const settledPeople = people.filter((p) => !p.outstanding.gt(0)).sort((a, b) => a.name.localeCompare(b.name));
+  const openPeople = people.filter((p) => !p.balance.isZero()).sort((a, b) => b.balance.abs().comparedTo(a.balance.abs()));
+  const settledPeople = people.filter((p) => p.balance.isZero()).sort((a, b) => a.name.localeCompare(b.name));
   const shown = view === 'open' ? openPeople : settledPeople;
-  const totalOwed = sum(openPeople.map((p) => p.outstanding));
+  const owedToYou = sum(openPeople.filter((p) => p.balance.gt(0)).map((p) => p.balance));
+  const youOwe = sum(openPeople.filter((p) => p.balance.lt(0)).map((p) => p.balance.abs()));
   const money = (v) => (hidden ? MASKED_AMOUNT : formatINR(v));
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="hidden md:block">
-          <h1 className="text-2xl font-bold text-gray-900">Receivables</h1>
-          <p className="text-sm text-gray-400 mt-1">Money people owe you from split expenses.</p>
+          <h1 className="text-2xl font-bold text-gray-900">People</h1>
+          <p className="text-sm text-gray-400 mt-1">One running balance with each person: what they owe you, and what you owe them.</p>
         </div>
-        <Link
-          to="/transactions/new?type=split_expense"
-          className="self-start sm:self-auto rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover transition-colors"
-        >
-          + New split expense
-        </Link>
+        <div className="flex gap-2 self-start sm:self-auto">
+          <Link
+            to="/transactions/new?type=reimbursement"
+            className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            + Money with a person
+          </Link>
+          <Link
+            to="/transactions/new?type=split_expense"
+            className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover transition-colors"
+          >
+            + New split expense
+          </Link>
+        </div>
       </div>
 
       <Card className="relative p-5">
         <div className="absolute right-5 top-4">
           <HideAmountsToggle hidden={hidden} onToggle={toggleHidden} />
         </div>
-        <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Owed to you</p>
-        <p className={`text-2xl font-bold tabular-nums mt-1 ${hidden ? 'text-gray-400' : 'text-gray-900'}`}>{money(totalOwed)}</p>
-        <p className="text-xs text-gray-400 mt-1">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Owed to you</p>
+            <p className={`text-2xl font-bold tabular-nums mt-1 ${hidden ? 'text-gray-400' : 'text-gray-900'}`}>{money(owedToYou)}</p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">You owe</p>
+            <p className={`text-2xl font-bold tabular-nums mt-1 ${hidden ? 'text-gray-400' : 'text-gray-900'}`}>{money(youOwe)}</p>
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">
           {openPeople.length === 0
-            ? 'Nobody owes you anything.'
-            : `${openPeople.length} ${openPeople.length === 1 ? 'person' : 'people'}`}
+            ? 'All settled with everyone.'
+            : `${openPeople.length} open ${openPeople.length === 1 ? 'balance' : 'balances'}`}
         </p>
       </Card>
 
@@ -120,8 +116,8 @@ export default function ReceivablesPage() {
       {shown.length === 0 ? (
         <Card className="p-8 text-center text-sm text-gray-500">
           {view === 'open'
-            ? 'Nothing open. Record a split expense when you pay for someone who will pay you back.'
-            : 'No fully settled people yet.'}
+            ? 'Nothing open. Record a split expense when you pay for someone, or record money when someone gives you some.'
+            : 'No settled balances yet.'}
         </Card>
       ) : (
         <div className="space-y-4">
@@ -148,8 +144,8 @@ export default function ReceivablesPage() {
 }
 
 function PersonCard({ person, money, onSettle }) {
-  const [expanded, setExpanded] = useState(person.outstanding.gt(0));
-  const isOpen = person.outstanding.gt(0);
+  const isOpen = !person.balance.isZero();
+  const [expanded, setExpanded] = useState(isOpen);
 
   return (
     <Card className="p-0 overflow-hidden">
@@ -161,63 +157,56 @@ function PersonCard({ person, money, onSettle }) {
         <div className="min-w-0">
           <p className="text-base font-bold text-gray-900">{person.name}</p>
           <p className="text-xs text-gray-400 mt-0.5">
-            {person.items.length} split{person.items.length === 1 ? '' : 's'} · {money(person.owed)} in total
+            {person.items.length} movement{person.items.length === 1 ? '' : 's'}
           </p>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="text-lg font-bold tabular-nums text-gray-900">{isOpen ? money(person.outstanding) : 'Settled'}</p>
-          {isOpen && <p className="text-[11px] text-gray-400">still owed</p>}
+          <p className="text-lg font-bold tabular-nums text-gray-900">{isOpen ? money(person.balance.abs()) : 'Settled'}</p>
+          {isOpen && <p className="text-[11px] text-gray-400">{balanceText(person.balance)}</p>}
         </div>
       </button>
 
-      {isOpen && (
-        <div className="flex flex-wrap gap-2 px-5 pb-4">
-          {Object.entries(SETTLE_ACTIONS).map(([mode, a]) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => onSettle(mode)}
-              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors ${
-                mode === 'money'
-                  ? 'bg-brand text-white hover:bg-brand-hover'
-                  : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {a.button}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Grouped by direction; the action that settles the balance stands out. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 pb-4">
+        {SETTLE_GROUPS.filter(([group]) => group !== 'off' || isOpen).map(([group, heading]) => (
+          <div key={group} className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{heading}</span>
+            {SETTLE_MODES.filter((m) => m.group === group).map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => onSettle(m.value)}
+                className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors ${
+                  (person.balance.lt(0) ? m.value === 'money_out' : m.value === 'money')
+                    ? 'bg-brand text-white hover:bg-brand-hover'
+                    : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
 
       {expanded && (
         <ul className="border-t border-gray-100 divide-y divide-gray-50">
-          {person.items.map((item) => (
+          {[...person.items].reverse().map((item) => (
             <li key={item.id} className="px-5 py-3">
               <div className="flex items-start justify-between gap-3 text-sm">
                 <Link to={`/transactions/${item.transaction}/edit`} className="min-w-0 hover:underline">
-                  <span className="text-gray-700 break-words">{item.transaction_label || 'Split expense'}</span>
+                  <span className="text-gray-700 break-words">{(MOVEMENT_TEXT[item.kind] ?? MOVEMENT_TEXT.split)(item)}</span>
                   <span className="block text-[11px] text-gray-400">{item.transaction_date && formatDate(item.transaction_date)}</span>
                 </Link>
                 <div className="text-right flex-shrink-0">
                   <p className="font-semibold tabular-nums text-gray-800">
-                    {item.outstanding.gt(0) ? money(item.outstanding) : money(item.amount_owed)}
+                    {item.amount.gt(0) ? '+' : '−'}{money(item.amount.abs())}
                   </p>
                   <p className="text-[11px] text-gray-400">
-                    {item.status === 'settled' ? 'settled' : item.status === 'partial' ? `of ${money(item.amount_owed)}` : 'owed'}
+                    {item.balanceAfter.isZero() ? 'settled' : `${money(item.balanceAfter.abs())} ${balanceText(item.balanceAfter)}`}
                   </p>
                 </div>
               </div>
-              {item.settlements?.length > 0 && (
-                <ul className="mt-1.5 space-y-0.5">
-                  {[...item.settlements].reverse().map((s) => (
-                    <li key={s.transaction_id} className="text-[11px] text-gray-400">
-                      <Link to={`/transactions/${s.transaction_id}/edit`} className="hover:underline">
-                        {formatDate(s.date)} · {SETTLEMENT_TEXT[s.kind](s)} · {money(D(s.amount))}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </li>
           ))}
         </ul>
@@ -229,9 +218,13 @@ function PersonCard({ person, money, onSettle }) {
 function SettleModal({ person, mode, onClose }) {
   const { accounts, categories, loadData } = useData();
   const toast = useToast();
-  const action = SETTLE_ACTIONS[mode];
+  const action = MODES[mode];
+  const fullAmount = settlingAmount(mode, person.balance);
+  // A payment for something is its own amount; money and write-offs default
+  // to what settles the balance.
+  const prefill = mode !== 'paid_for_me' && mode !== 'paid_for_them' && fullAmount.gt(0);
 
-  const [amount, setAmount] = useState(person.outstanding.toString());
+  const [amount, setAmount] = useState(prefill ? fullAmount.toString() : '');
   const [date, setDate] = useState(todayLocal());
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -239,15 +232,21 @@ function SettleModal({ person, mode, onClose }) {
   const [busy, setBusy] = useState(false);
 
   const assetAccounts = accounts.filter((a) => a.type === 'asset' && a.is_active !== false);
+  // Paying for someone can go on a card too.
+  const payingAccounts = accounts.filter(
+    (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false,
+  );
   const spendCategories = categories.filter((c) => c.type === 'expense' && !c.role);
 
   function validate() {
     const errs = {};
     const parsed = D(amount || 0);
     if (!parsed.gt(0)) errs.amount = 'Enter a positive amount.';
-    else if (parsed.minus(person.outstanding).gt('0.001')) errs.amount = `${person.name} owes ${formatINR(person.outstanding)}.`;
+    else if (mode === 'write_off' && parsed.minus(fullAmount).gt('0.001')) {
+      errs.amount = `The balance is ${formatINR(fullAmount)}.`;
+    }
     if (!date) errs.date = 'Pick a date.';
-    if (mode === 'money' && !accountId) errs.account = 'Select the account the money came into.';
+    if (['money', 'money_out', 'paid_for_them'].includes(mode) && !accountId) errs.account = 'Select the account.';
     if (mode === 'paid_for_me' && !categoryId) errs.category = 'Select what they paid for.';
     return errs;
   }
@@ -259,24 +258,24 @@ function SettleModal({ person, mode, onClose }) {
     if (Object.keys(errs).length > 0) return;
     setBusy(true);
     try {
-      await api.settleReceivables({
+      const result = await api.settleReceivables({
         person_name: person.name,
         mode,
         amount: round2(D(amount)).toString(),
         date,
         ...(mode === 'money' ? { to_account_id: parseInt(accountId, 10) } : {}),
-        ...(mode === 'paid_for_me' ? { category_id: parseInt(categoryId, 10) } : {}),
+        ...(mode === 'money_out' || mode === 'paid_for_them' ? { from_account_id: parseInt(accountId, 10) } : {}),
+        ...((mode === 'paid_for_me' || mode === 'paid_for_them') && categoryId ? { category_id: parseInt(categoryId, 10) } : {}),
       });
-      toast.success(mode === 'write_off' ? `Wrote off ${formatINR(D(amount))}` : `Settled ${formatINR(D(amount))}`);
+      const balance = D(result.balance);
+      toast.success(balance.isZero() ? `Settled with ${person.name}` : balanceSentence(person.name, balance));
       await loadData();
       onClose();
     } catch (err) {
-      setErrors({ submit: err.message || 'Could not settle.' });
+      setErrors({ submit: err.message || 'Could not save.' });
       setBusy(false);
     }
   }
-
-  const partial = D(amount || 0).lt(person.outstanding) && D(amount || 0).gt(ZERO);
 
   return (
     <Modal isOpen onClose={onClose} title={`${action.title} · ${person.name}`}>
@@ -298,9 +297,7 @@ function SettleModal({ person, mode, onClose }) {
             />
           </div>
           <p className="mt-1 text-[11px] text-gray-400">
-            {partial
-              ? 'Less than the full amount: the oldest splits are settled first.'
-              : `Full amount owed: ${formatINR(person.outstanding)}.`}
+            {balanceSentence(person.name, person.balance)}
           </p>
           {errors.amount && <p className={errorClass}>{errors.amount}</p>}
         </div>
@@ -311,24 +308,24 @@ function SettleModal({ person, mode, onClose }) {
           {errors.date && <p className={errorClass}>{errors.date}</p>}
         </div>
 
-        {mode === 'money' && (
+        {['money', 'money_out', 'paid_for_them'].includes(mode) && (
           <AccountPicker
             value={accountId}
-            accounts={assetAccounts}
-            label="Received Into"
+            accounts={mode === 'paid_for_them' ? payingAccounts : assetAccounts}
+            label={{ money: 'Received Into', money_out: 'Sent From', paid_for_them: 'Paid From' }[mode]}
             error={errors.account}
             onChange={(id) => setAccountId(id)}
           />
         )}
 
-        {mode === 'paid_for_me' && (
+        {(mode === 'paid_for_me' || mode === 'paid_for_them') && (
           <div>
-            <label className={labelClass}>What They Paid For</label>
+            <label className={labelClass}>{mode === 'paid_for_me' ? 'What They Paid For' : 'What For (Optional)'}</label>
             <Select
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
               options={categoryOptions(spendCategories)}
-              placeholder="Select category"
+              placeholder={mode === 'paid_for_me' ? 'Select category' : 'Not recorded'}
             />
             {errors.category && <p className={errorClass}>{errors.category}</p>}
           </div>
@@ -349,7 +346,7 @@ function SettleModal({ person, mode, onClose }) {
             disabled={busy}
             className="flex-1 rounded-xl bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
           >
-            {busy ? 'Saving…' : action.button}
+            {busy ? 'Saving…' : 'Save'}
           </button>
         </div>
       </form>

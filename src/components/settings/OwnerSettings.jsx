@@ -132,7 +132,7 @@ export default function OwnerSettings() {
                 ['Investment', 'Who the investment is for'],
                 ['Cashback', 'Who earned the reward (whose card/purchase triggered it)'],
                 ['Split Expense', 'Who paid the bill upfront'],
-                ['Reimbursement', 'Who is receiving the money back'],
+                ['People', 'Whose account the money moved through'],
               ].map(([type, desc]) => (
                 <tr key={type} className="bg-white">
                   <td className="px-4 py-2.5 font-medium text-gray-700 whitespace-nowrap">{type}</td>

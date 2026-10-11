@@ -70,7 +70,8 @@ describe('transactionTypeLabel', () => {
     ['bill_payment',  'Bill Payment'],
     ['investment',    'Investment'],
     ['split_expense', 'Split Expense'],
-    ['reimbursement', 'Reimbursement'],
+    ['reimbursement', 'From person'],
+    ['payout', 'To person'],
   ])('maps %s -> %s', (type, label) => {
     expect(transactionTypeLabel(type)).toBe(label);
   });

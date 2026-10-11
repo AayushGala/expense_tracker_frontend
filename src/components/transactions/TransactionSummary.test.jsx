@@ -71,17 +71,23 @@ describe('TransactionSummary', () => {
     expect(screen.getByText(/2 bill payments/i)).toBeInTheDocument();
   });
 
-  it('shows what split expenses put on others as a "to get back" pill', () => {
+  it('shows what split expenses put on others', () => {
     const summary = { ...baseSummary, split_count: 2, split_others_amount: 4226.4 };
     render(<TransactionSummary summary={summary} isLoading={false} />);
     expect(screen.getByText(/^2 split expenses$/i)).toBeInTheDocument();
-    expect(screen.getByText(/to get back/i)).toBeInTheDocument();
+    expect(screen.getByText(/₹4,226\.40/)).toBeInTheDocument();
   });
 
-  it('shows what is left to get back once part is settled', () => {
-    const summary = { ...baseSummary, split_count: 3, split_others_amount: 38958, split_outstanding: 27022 };
+  it('shows today\'s balances with people in both directions', () => {
+    const summary = { ...baseSummary, people_owe_you: 27022, you_owe_people: 300 };
     render(<TransactionSummary summary={summary} isLoading={false} />);
-    expect(screen.getByText(/₹27,022\.00 left to get back/)).toBeInTheDocument();
+    expect(screen.getByText(/people owe you ₹27,022\.00 · you owe ₹300\.00/)).toBeInTheDocument();
+  });
+
+  it('shows a payout pill when payout_count > 0', () => {
+    const summary = { ...baseSummary, payout_count: 2, payout_amount: 500 };
+    render(<TransactionSummary summary={summary} isLoading={false} />);
+    expect(screen.getByText(/^2 payouts$/i)).toBeInTheDocument();
   });
 
   it('hides the split pill when splits put nothing on others', () => {

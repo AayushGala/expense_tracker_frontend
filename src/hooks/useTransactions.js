@@ -36,6 +36,7 @@ export function useTransactions(filters = {}, { page = 1, ordering, pageSize } =
       myShare: r.my_share != null ? D(r.my_share) : null,
       accountNames: r.account_names ?? [],
       categoryNames: r.category_names ?? [],
+      involvedOwners: r.involved_owners ?? [],
     })),
     [data],
   );

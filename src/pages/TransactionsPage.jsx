@@ -72,6 +72,19 @@ function SortableHeader({ label, sortKey, sortChain, onSort, align = 'left', cla
 }
 
 // ---------------------------------------------------------------------------
+// InvolvesTag — other owners whose accounts the transaction touches
+// ---------------------------------------------------------------------------
+
+function InvolvesTag({ txn }) {
+  if (!txn.involvedOwners?.length) return null;
+  return (
+    <span className="ml-1.5 inline-flex items-center rounded-md bg-accent-light px-1.5 py-0.5 align-middle text-[10px] font-semibold text-brand whitespace-nowrap">
+      involves {txn.involvedOwners.join(', ')}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // TransactionRow — table-style row (desktop)
 // ---------------------------------------------------------------------------
 
@@ -95,6 +108,7 @@ function TransactionRow({ txn, onClick }) {
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900 break-words">
               {txn.notes || transactionTypeLabel(txn.type)}
+              <InvolvesTag txn={txn} />
             </p>
             {(txn.accountNames?.length > 0 || txn.platform) && (
               <p className="text-xs text-gray-400 break-words mt-0.5">
@@ -141,6 +155,7 @@ function TransactionCard({ txn, onClick }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-900 break-words">
           {txn.notes || transactionTypeLabel(txn.type)}
+          <InvolvesTag txn={txn} />
         </p>
         <p className="text-xs text-gray-400 mt-0.5 break-words">
           {formatDate(txn.date)}

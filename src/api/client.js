@@ -143,6 +143,7 @@ const api = {
   getMonthReview: (params) => request('GET', `/api/transactions/month_review/${qs(params)}`),
   getCategoryInsights: (params) => request('GET', `/api/transactions/category_insights/${qs(params)}`),
   getBeneficiaries: () => request('GET', '/api/transactions/beneficiaries/'),
+  getPeople: () => request('GET', '/api/transactions/people/'),
   getTagCounts: () => request('GET', '/api/transactions/tag_counts/'),
   getTransactionsCSV: (params) => requestBlob(`/api/transactions/export/${qs(params)}`),
 

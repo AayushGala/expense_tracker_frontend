@@ -1,10 +1,12 @@
 import { useData } from '../../context/DataContext';
 import { useOwners } from '../../hooks/useOwners';
+import { usePeople } from '../../hooks/useReportData';
 import Select from '../common/Select';
 import AmountInput from '../forms/AmountInput';
 import AccountPicker from '../forms/AccountPicker';
 import CategoryPicker from '../forms/CategoryPicker';
 import DateField from '../forms/DateField';
+import PersonInput from '../forms/PersonInput';
 import { inputClass, labelClass, errorClass } from '../../utils/formStyles';
 import {
   validateAmount,
@@ -19,6 +21,7 @@ const PREDEFINED_BENEFICIARIES = ['self', 'family'];
 export default function ExpenseForm({ values, errors, dispatch, onSubmit, isEditing }) {
   const { accounts, categories } = useData();
   const { owners } = useOwners();
+  const people = usePeople();
 
   const payableAccounts = accounts.filter(
     (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false,
@@ -115,13 +118,12 @@ export default function ExpenseForm({ values, errors, dispatch, onSubmit, isEdit
           />
           {values.beneficiary_type === 'custom' && (
             <div className="mt-2">
-              <input
+              <PersonInput
                 id="txn-custom-beneficiary"
-                type="text"
                 placeholder="Enter name"
                 value={values.custom_beneficiary}
-                onChange={(e) => setField('custom_beneficiary', e.target.value)}
-                className={inputClass}
+                onChange={(name) => setField('custom_beneficiary', name)}
+                people={people}
               />
               {errors.custom_beneficiary && (
                 <p className={errorClass}>{errors.custom_beneficiary}</p>

@@ -4,8 +4,10 @@ import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
 import api from '../../api/client';
 import { useApiResource } from '../../hooks/useApiResource';
+import { usePeople } from '../../hooks/useReportData';
 import CalendarPicker from '../common/CalendarPicker';
 import Select from '../common/Select';
+import PersonInput from '../forms/PersonInput';
 import SMSStatusBadge from './SMSStatusBadge';
 import {
   inputClass, labelClass, errorClass, accountOption, categoryOptions,
@@ -120,6 +122,7 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
   const { accounts, categories, confirmSMS } = useData();
   const navigate = useNavigate();
   const toast = useToast();
+  const people = usePeople();
 
   const usableAccounts = accounts.filter(
     (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false,
@@ -442,12 +445,11 @@ export default function SMSDetailDrawer({ sms, onSuccess, onClose, onViewLinkedT
               />
               {values.beneficiary_type === 'custom' && (
                 <div className="mt-2">
-                  <input
-                    type="text"
+                  <PersonInput
                     placeholder="Enter name"
                     value={values.custom_beneficiary}
-                    onChange={(e) => setField('custom_beneficiary', e.target.value)}
-                    className={inputClass}
+                    onChange={(name) => setField('custom_beneficiary', name)}
+                    people={people}
                   />
                   {errors.custom_beneficiary && (
                     <p className={errorClass}>{errors.custom_beneficiary}</p>

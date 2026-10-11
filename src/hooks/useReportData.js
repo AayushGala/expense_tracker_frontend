@@ -53,3 +53,12 @@ export function useBeneficiaries() {
   const { data } = useApiResource(() => api.getBeneficiaries(), [dataVersion ?? 0]);
   return useMemo(() => (data ?? []).map((b) => ({ value: b, label: beneficiaryLabel(b) })), [data]);
 }
+
+const NO_PEOPLE = [];
+
+// Names from beneficiaries and splits, for the person name pickers.
+export function usePeople() {
+  const { dataVersion } = useData();
+  const { data } = useApiResource(() => api.getPeople(), [dataVersion ?? 0]);
+  return data ?? NO_PEOPLE;
+}

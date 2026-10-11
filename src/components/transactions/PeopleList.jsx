@@ -1,4 +1,6 @@
 import { inputClass, errorClass } from '../../utils/formStyles';
+import { usePeople } from '../../hooks/useReportData';
+import PersonInput from '../forms/PersonInput';
 
 // Not persisted — used only as a React key for the row's lifetime.
 function makeId() {
@@ -11,6 +13,8 @@ export default function PeopleList({
   listError,
   onChange,
 }) {
+  const knownPeople = usePeople();
+
   function add() {
     onChange([...(people ?? []), { id: makeId(), name: '', amount: '' }]);
   }
@@ -40,12 +44,12 @@ export default function PeopleList({
         {(people ?? []).map((person, idx) => (
           <div key={person.id} className="flex gap-2 items-start">
             <div className="flex-1">
-              <input
-                type="text"
+              <PersonInput
                 placeholder="Person name"
                 value={person.name}
-                onChange={(e) => update(person.id, 'name', e.target.value)}
-                className={`${inputClass} ${errors[`person_name_${idx}`] ? 'border-red-400' : ''}`}
+                onChange={(name) => update(person.id, 'name', name)}
+                people={knownPeople}
+                className={errors[`person_name_${idx}`] ? 'border-red-400' : ''}
               />
               {errors[`person_name_${idx}`] && (
                 <p className={errorClass}>{errors[`person_name_${idx}`]}</p>

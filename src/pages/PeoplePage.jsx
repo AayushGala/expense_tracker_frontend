@@ -145,19 +145,30 @@ export default function PeoplePage() {
 
 function PersonCard({ person, money, onSettle }) {
   const isOpen = !person.balance.isZero();
-  const [expanded, setExpanded] = useState(isOpen);
+  // History starts collapsed: a long-running balance has many movements.
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <Card className="p-0 overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
-        className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-gray-50/80 transition-colors"
+        aria-expanded={expanded}
+        className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left focus-highlight hover:bg-gray-50/80 transition-colors"
       >
         <div className="min-w-0">
           <p className="text-base font-bold text-gray-900">{person.name}</p>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
             {person.items.length} movement{person.items.length === 1 ? '' : 's'}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`}
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden
+            >
+              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
           </p>
         </div>
         <div className="text-right flex-shrink-0">

@@ -157,6 +157,8 @@ describe('SET_TYPE', () => {
     ['transfer',      'expense',      { from_account_id: '1', to_account_id: '2' }, '1', ''],
     // dual -> single-to: keep to, drop from
     ['transfer',      'income',       { from_account_id: '1', to_account_id: '2' }, '',  '2'],
+    // an SMS income becomes money from a person: the account it came into stays
+    ['income',        'reimbursement', { to_account_id: '7' }, '',  '7'],
     // reimbursement (dual: money in or out) -> expense: keep from, drop to
     ['reimbursement', 'expense',      { from_account_id: '8', to_account_id: '9' }, '8',  ''],
   ])('carryAccount: %s -> %s', (from, to, seed, expectFrom, expectTo) => {

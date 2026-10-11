@@ -85,6 +85,13 @@ tr:focus-visible {
   background-color: rgb(243 244 246); /* gray-100 */
 }
 
+/* Same for a clickable header inside a card that clips its overflow: the
+   outline would show as a stray line along the card. */
+.focus-highlight:focus-visible {
+  outline: none;
+  background-color: rgb(249 250 251); /* gray-50 */
+}
+
 /* Remove focus outline inside dropdown menus */
 [role="listbox"] button:focus-visible,
 [role="listbox"] button:focus {

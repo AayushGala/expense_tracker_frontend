@@ -26,6 +26,8 @@ test('a person owing on two splits is written off in one go from the People page
   await page.goto('/people');
   const card = page.locator('div', { hasText: 'Rahul' }).filter({ hasText: 'owes you' }).first();
   await expect(card.getByText('₹1,000.00').first()).toBeVisible();
+  // History starts collapsed.
+  await card.getByText('Rahul', { exact: true }).click();
   await expect(card.getByText('Dinner')).toBeVisible();
   await expect(card.getByText('Movie')).toBeVisible();
 
@@ -88,6 +90,7 @@ test('paying for someone from the People page raises their balance without count
   await page.goto('/people');
   const card = page.locator('div', { hasText: 'Riya' }).filter({ hasText: 'owes you' }).first();
   await expect(card.getByText('₹450.00').first()).toBeVisible();
+  await card.getByText('Riya', { exact: true }).click();
   await expect(card.getByText('Paid for their Groceries')).toBeVisible();
 
   await page.goto('/transactions');

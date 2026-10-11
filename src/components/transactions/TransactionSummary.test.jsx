@@ -84,10 +84,10 @@ describe('TransactionSummary', () => {
     expect(screen.getByText(/people owe you ₹27,022\.00 · you owe ₹300\.00/)).toBeInTheDocument();
   });
 
-  it('shows a payout pill when payout_count > 0', () => {
+  it('shows a to-person pill when payout_count > 0', () => {
     const summary = { ...baseSummary, payout_count: 2, payout_amount: 500 };
     render(<TransactionSummary summary={summary} isLoading={false} />);
-    expect(screen.getByText(/^2 payouts$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^2 to person$/i)).toBeInTheDocument();
   });
 
   it('hides the split pill when splits put nothing on others', () => {
@@ -96,10 +96,10 @@ describe('TransactionSummary', () => {
     expect(screen.queryByText(/split expense/i)).not.toBeInTheDocument();
   });
 
-  it('shows reimbursement pill when reimbursement_count > 0', () => {
+  it('shows a from-person pill when reimbursement_count > 0', () => {
     const summary = { ...baseSummary, reimbursement_count: 1, reimbursement_amount: 3000 };
     render(<TransactionSummary summary={summary} isLoading={false} />);
-    expect(screen.getByText(/^1 reimbursement$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^1 from person$/i)).toBeInTheDocument();
   });
 
   it('shows the "Other movements" header when at least one movement is present', () => {

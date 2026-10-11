@@ -23,11 +23,12 @@ function StatBlock({ label, value, variant = 'neutral', format = 'currency', hid
   );
 }
 
-function MovementPill({ icon, count, label, amount, hidden }) {
+// plural: false keeps a label that reads as a name ("2 from person").
+function MovementPill({ icon, count, label, amount, plural = true, hidden }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600">
       <span aria-hidden>{icon}</span>
-      <span className="font-medium">{count} {label}{count === 1 ? '' : 's'}</span>
+      <span className="font-medium">{count} {label}{plural && count !== 1 ? 's' : ''}</span>
       <span className="text-gray-400 tabular-nums">{hidden ? MASK : formatINR(amount)}</span>
     </span>
   );
@@ -64,8 +65,9 @@ export default function TransactionSummary({ summary, isLoading }) {
     { key: 'transfer', icon: '↔', label: 'transfer', count: summary.transfer_count, amount: summary.transfer_amount },
     { key: 'investment', icon: '📈', label: 'investment', count: summary.investment_count, amount: summary.investment_amount },
     { key: 'bill_payment', icon: '💳', label: 'bill payment', count: summary.bill_payment_count, amount: summary.bill_payment_amount },
-    { key: 'reimbursement', icon: '↩', label: 'reimbursement', count: summary.reimbursement_count, amount: summary.reimbursement_amount },
-    { key: 'payout', icon: '↪', label: 'payout', count: summary.payout_count, amount: summary.payout_amount },
+    // Named like their badges: money with a person, by direction.
+    { key: 'reimbursement', icon: '↩', label: 'from person', plural: false, count: summary.reimbursement_count, amount: summary.reimbursement_amount },
+    { key: 'payout', icon: '↪', label: 'to person', plural: false, count: summary.payout_count, amount: summary.payout_amount },
   ].filter((m) => (m.count ?? 0) > 0 && (m.key !== 'split' || Number(m.amount) > 0));
 
   const oweYou = Number(summary.people_owe_you ?? 0);
@@ -99,6 +101,7 @@ export default function TransactionSummary({ summary, isLoading }) {
                 count={m.count}
                 label={m.label}
                 amount={m.amount}
+                plural={m.plural}
                 hidden={hidden}
               />
             ))}

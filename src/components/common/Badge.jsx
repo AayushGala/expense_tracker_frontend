@@ -17,7 +17,7 @@ export default function Badge({ type, className = '' }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-lg px-2 py-0.5 text-[11px] font-semibold ring-1 ${style} ${className}`}
+      className={`inline-flex items-center whitespace-nowrap rounded-lg px-2 py-0.5 text-[11px] font-semibold ring-1 ${style} ${className}`}
     >
       {label}
     </span>

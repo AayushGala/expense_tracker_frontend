@@ -142,7 +142,14 @@ export default function TransactionDetail({
     toName = debitAccount ? accountMap.get(debitAccount.account_id)?.name : null;
   }
 
+  // Money with a person: whose balance it moved (list rows carry
+  // person_name; the fetched detail carries its receivable rows).
+  const personName = (type === 'reimbursement' || type === 'payout')
+    ? (t.person_name ?? t.receivables?.[0]?.person_name ?? transaction.person_name)
+    : null;
+
   const detailRows = [
+    personName && { label: 'Person', value: personName },
     fromName && { label: 'From Account', value: fromName },
     toName && { label: 'To Account', value: toName },
     category_id && { label: 'Category', value: categoryMap.get(category_id)?.name ?? categoryName ?? category_id },

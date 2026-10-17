@@ -28,7 +28,7 @@ const SHARED_FIELDS = [
 const TYPE_FIELDS = {
   expense:       ['from_account_id', 'category_id'],
   income:        ['to_account_id',   'category_id', 'source_transaction_id'],
-  transfer:      ['from_account_id', 'to_account_id', 'fee', 'fee_category_id'],
+  transfer:      ['from_account_id', 'to_account_id', 'fee', 'fee_category_id', 'bonus', 'bonus_category_id'],
   bill_payment:  ['from_account_id', 'to_account_id'],
   investment:    ['from_account_id', 'to_account_id'],
   split_expense: ['from_account_id', 'category_id', 'total_people', 'my_share_type', 'custom_my_share', 'other_people'],
@@ -51,6 +51,8 @@ export const FIELD_DEFAULTS = {
   source_transaction_id: null,
   fee: '',
   fee_category_id: '',
+  bonus: '',
+  bonus_category_id: '',
   total_people: '2',
   my_share_type: 'equal',
   custom_my_share: '',

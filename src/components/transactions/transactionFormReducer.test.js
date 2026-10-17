@@ -197,8 +197,8 @@ describe('SET_TYPE', () => {
   it.each([
     [
       'transfer', 'expense',
-      { fee: '10', fee_category_id: '2' },
-      ['fee', 'fee_category_id'],
+      { fee: '10', fee_category_id: '2', bonus: '200', bonus_category_id: '5' },
+      ['fee', 'fee_category_id', 'bonus', 'bonus_category_id'],
     ],
     [
       'split_expense', 'expense',

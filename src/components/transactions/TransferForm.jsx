@@ -24,6 +24,11 @@ export default function TransferForm({ values, errors, dispatch, onSubmit, isEdi
     (a) => (a.type === 'asset' || a.type === 'liability') && a.is_active !== false,
   );
   const expenseCategories = categories.filter((c) => c.type === 'expense');
+  const incomeCategories = categories.filter((c) => c.type === 'income');
+  const cashbackCategory = incomeCategories.find((c) => c.role === 'cashback');
+
+  // A bonus with no category picked books to Cashback / Rewards.
+  const bonusCategoryId = values.bonus_category_id || (cashbackCategory ? String(cashbackCategory.id) : '');
 
   function setField(name, value) {
     dispatch({ type: 'SET_FIELD', name, value });
@@ -31,6 +36,7 @@ export default function TransferForm({ values, errors, dispatch, onSubmit, isEdi
 
   function validate() {
     const feeDec = D(values.fee);
+    const bonusDec = D(values.bonus);
     return collectErrors({
       amount: validateAmount(values.amount),
       date: validateDate(values.date),
@@ -41,6 +47,11 @@ export default function TransferForm({ values, errors, dispatch, onSubmit, isEdi
       fee: validateOptionalAmount(values.fee),
       fee_category_id: feeDec.gt(0)
         ? validateRequired(values.fee_category_id, { message: 'Select a category for the fee.' })
+        : null,
+      bonus: validateOptionalAmount(values.bonus, { message: 'Enter a valid bonus amount.' }) ??
+        (bonusDec.gt(0) && feeDec.gt(0) ? 'A transfer takes a fee or a bonus, not both.' : null),
+      bonus_category_id: bonusDec.gt(0)
+        ? validateRequired(bonusCategoryId, { message: 'Select a category for the bonus.' })
         : null,
     });
   }
@@ -55,6 +66,7 @@ export default function TransferForm({ values, errors, dispatch, onSubmit, isEdi
 
     const amountStr = round2(D(values.amount)).toString();
     const feeDec = D(values.fee);
+    const bonusDec = D(values.bonus);
 
     const payload = {
       type: 'transfer',
@@ -71,6 +83,10 @@ export default function TransferForm({ values, errors, dispatch, onSubmit, isEdi
       payload.fee = round2(feeDec).toString();
       payload.fee_category_id = parseInt(values.fee_category_id);
     }
+    if (bonusDec.gt(0) && bonusCategoryId) {
+      payload.bonus = round2(bonusDec).toString();
+      payload.bonus_category_id = parseInt(bonusCategoryId);
+    }
 
     onSubmit(payload);
   }
@@ -78,6 +94,9 @@ export default function TransferForm({ values, errors, dispatch, onSubmit, isEdi
   const parsedAmount = D(values.amount);
   const parsedFee = D(values.fee);
   const totalDebited = parsedAmount.plus(parsedFee);
+  const parsedBonus = D(values.bonus);
+  const totalCredited = parsedAmount.plus(parsedBonus);
+  const toAccountName = accounts.find((a) => String(a.id) === String(values.to_account_id))?.name ?? 'Destination';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -151,6 +170,35 @@ export default function TransferForm({ values, errors, dispatch, onSubmit, isEdi
       {parsedFee.gt(0) && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
           <span className="font-medium">Total debited:</span> {formatINR(totalDebited)} ({formatINR(parsedAmount)} transfer + {formatINR(parsedFee)} fee)
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <AmountInput
+          id="txn-bonus"
+          label={<>Bonus <span className="text-gray-400 font-normal">(optional, e.g. gift card discount)</span></>}
+          variant="compact"
+          value={values.bonus}
+          onChange={(v) => setField('bonus', v)}
+          error={errors.bonus}
+        />
+        <div>
+          <label className={labelClass}>Bonus Category</label>
+          <Select
+            value={bonusCategoryId}
+            onChange={(e) => setField('bonus_category_id', e.target.value)}
+            options={incomeCategories.map((c) => ({ value: String(c.id), label: c.name }))}
+            placeholder="Select bonus category"
+          />
+          {errors.bonus_category_id && (
+            <p className="mt-1.5 text-xs text-rose-500 font-medium">{errors.bonus_category_id}</p>
+          )}
+        </div>
+      </div>
+
+      {parsedBonus.gt(0) && (
+        <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
+          <span className="font-medium">{toAccountName} gets:</span> {formatINR(totalCredited)} ({formatINR(parsedAmount)} paid + {formatINR(parsedBonus)} bonus)
         </div>
       )}
 

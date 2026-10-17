@@ -47,6 +47,7 @@ export function valuesFromTransaction(txn) {
   const acctDebit = entries.find((e) => e.entry_type === 'DEBIT' && e.account_id);
   const acctCredit = entries.find((e) => e.entry_type === 'CREDIT' && e.account_id);
   const catDebit = entries.find((e) => e.entry_type === 'DEBIT' && e.category_id);
+  const catCredit = entries.find((e) => e.entry_type === 'CREDIT' && e.category_id);
 
   const values = {
     type: txn.type,
@@ -63,6 +64,8 @@ export function valuesFromTransaction(txn) {
     notes: txn.notes ?? '',
     fee: '',
     fee_category_id: '',
+    bonus: '',
+    bonus_category_id: '',
     source_transaction_id: txn.source_transaction ? String(txn.source_transaction) : '',
   };
 
@@ -79,6 +82,12 @@ export function valuesFromTransaction(txn) {
     if (txn.type === 'transfer' && catDebit) {
       values.fee = catDebit.amount;
       values.fee_category_id = String(catDebit.category_id);
+    }
+    // A bonus transfer: the source paid the amount, the destination got more.
+    if (txn.type === 'transfer' && catCredit) {
+      values.amount = acctCredit?.amount ?? '';
+      values.bonus = catCredit.amount;
+      values.bonus_category_id = String(catCredit.category_id);
     }
   }
   return values;
@@ -122,6 +131,10 @@ export function buildTransactionPayload(values, accounts) {
   if (values.type === 'transfer' && values.fee) {
     payload.fee = String(values.fee);
     putInt(payload, 'fee_category_id', values.fee_category_id);
+  }
+  if (values.type === 'transfer' && values.bonus) {
+    payload.bonus = String(values.bonus);
+    putInt(payload, 'bonus_category_id', values.bonus_category_id);
   }
   if (values.source_transaction_id) putInt(payload, 'source_transaction_id', values.source_transaction_id);
   return payload;

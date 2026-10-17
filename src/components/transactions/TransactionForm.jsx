@@ -78,7 +78,28 @@ function buildInitialData(transaction, entries, accounts, receivables) {
         category_id: transaction.category_id ?? creditCategoryEntry?.category_id ?? '',
         source_transaction_id: transaction.source_transaction ?? null,
       };
-    case 'transfer':
+    case 'transfer': {
+      // Fee: an expense DEBIT, the destination gets the amount. Bonus: an
+      // income CREDIT, the source pays the amount.
+      const transfer = {
+        ...base,
+        from_account_id: creditAccountEntry?.account_id ?? '',
+        to_account_id: debitAccountEntry?.account_id ?? '',
+        amount: debitAccountEntry?.amount ?? amount,
+      };
+      if (debitCategoryEntry) {
+        return { ...transfer, fee: debitCategoryEntry.amount, fee_category_id: debitCategoryEntry.category_id };
+      }
+      if (creditCategoryEntry) {
+        return {
+          ...transfer,
+          amount: creditAccountEntry?.amount ?? amount,
+          bonus: creditCategoryEntry.amount,
+          bonus_category_id: creditCategoryEntry.category_id,
+        };
+      }
+      return transfer;
+    }
     case 'bill_payment':
     case 'investment':
       return {
@@ -182,6 +203,13 @@ function valuesFromInitialData(initialData) {
   }
   if (initialData.fee_category_id !== undefined && initialData.fee_category_id !== '') {
     v.fee_category_id = String(initialData.fee_category_id);
+  }
+
+  if (initialData.bonus !== undefined && initialData.bonus !== '') {
+    v.bonus = String(initialData.bonus);
+  }
+  if (initialData.bonus_category_id !== undefined && initialData.bonus_category_id !== '') {
+    v.bonus_category_id = String(initialData.bonus_category_id);
   }
 
   if (initialData.total_amount != null && initialData.total_amount !== '') {

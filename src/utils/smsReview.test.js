@@ -59,6 +59,22 @@ describe('valuesFromTransaction', () => {
     expect(values.fee_category_id).toBe('7');
   });
 
+  it('maps a transfer with bonus (amount is what the source paid)', () => {
+    const values = valuesFromTransaction({
+      type: 'transfer', date: '2026-07-01', category: null, entries: [
+        { entry_type: 'DEBIT', account_id: 3, category_id: null, amount: '2500.00' },
+        { entry_type: 'CREDIT', account_id: 1, category_id: null, amount: '2300.00' },
+        { entry_type: 'CREDIT', account_id: null, category_id: 8, amount: '200.00' },
+      ],
+    });
+    expect(values.amount).toBe('2300.00');
+    expect(values.to_account_id).toBe('3');
+    expect(values.from_account_id).toBe('1');
+    expect(values.bonus).toBe('200.00');
+    expect(values.bonus_category_id).toBe('8');
+    expect(values.fee).toBe('');
+  });
+
   it('maps income (amount and to-account from the account debit)', () => {
     const values = valuesFromTransaction({
       type: 'income', date: '2026-07-01', category: 5, entries: [
@@ -112,6 +128,16 @@ describe('buildTransactionPayload', () => {
     }, ACCOUNTS);
     expect(payload.fee).toBe('25.00');
     expect(payload.fee_category_id).toBe(7);
+  });
+
+  it('keeps transfer bonus fields', () => {
+    const payload = buildTransactionPayload({
+      type: 'transfer', date: '2026-07-01', amount: '2300',
+      from_account_id: '1', to_account_id: '3', owner: '',
+      bonus: '200.00', bonus_category_id: '8',
+    }, ACCOUNTS);
+    expect(payload.bonus).toBe('200.00');
+    expect(payload.bonus_category_id).toBe(8);
   });
 });
 
